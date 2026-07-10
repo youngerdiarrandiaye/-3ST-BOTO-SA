@@ -80,10 +80,14 @@ export async function validerNiveau2(
   if (valider) {
     updateData.autorisation_resp_sst = true
     updateData.motif_refus_resp_sst = null
+    updateData.validation_sst = true
     if (current?.statut === 'refuse') updateData.statut = 'en_attente'
   } else {
     updateData.autorisation_resp_sst = false
     updateData.motif_refus_resp_sst = motif!.trim()
+    // SST refusé invalide aussi la visite médicale
+    updateData.validation_sst = false
+    updateData.validation_clinique = false
   }
 
   const { error } = await admin.from('conducteurs').update(updateData).eq('id', conducteurId)
@@ -119,10 +123,14 @@ export async function validerNiveau3(
     updateData.autorisation_clinique = true
     updateData.medecin_clinique = medecinNom?.trim() || null
     updateData.motif_refus_clinique = null
+    // N3 validé = workflow complet → les deux champs permis activés
+    updateData.validation_sst = true
+    updateData.validation_clinique = true
     if (current?.statut === 'refuse') updateData.statut = 'en_attente'
   } else {
     updateData.autorisation_clinique = false
     updateData.motif_refus_clinique = motif!.trim()
+    updateData.validation_clinique = false
   }
 
   const { error } = await admin.from('conducteurs').update(updateData).eq('id', conducteurId)
