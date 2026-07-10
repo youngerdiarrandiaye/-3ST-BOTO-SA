@@ -28,6 +28,7 @@ async function getDashboardData() {
     { count: infractions_mois },
     { count: permis_expirant_30j },
     { count: conducteurs_suspendus },
+    { count: conducteurs_en_attente },
     { data: dernieresInfractions },
     { data: infractionsParSemaine },
   ] = await Promise.all([
@@ -36,6 +37,7 @@ async function getDashboardData() {
     supabase.from('permis_internes').select('*', { count: 'exact', head: true })
       .eq('statut', 'valide').gte('date_expiration', today).lte('date_expiration', dans30j),
     supabase.from('conducteurs').select('*', { count: 'exact', head: true }).eq('statut', 'suspendu'),
+    supabase.from('conducteurs').select('*', { count: 'exact', head: true }).eq('statut', 'en_attente'),
     supabase.from('infractions')
       .select('id, date_heure, statut, conducteurs(nom, prenom, matricule), types_infraction(code, libelle, gravite, points_retires)')
       .order('date_heure', { ascending: false })
@@ -58,10 +60,11 @@ async function getDashboardData() {
 
   return {
     stats: {
-      conducteurs_actifs:   conducteurs_actifs   ?? 0,
-      infractions_mois:     infractions_mois     ?? 0,
-      permis_expirant_30j:  permis_expirant_30j  ?? 0,
-      conducteurs_suspendus: conducteurs_suspendus ?? 0,
+      conducteurs_actifs:    conducteurs_actifs    ?? 0,
+      infractions_mois:      infractions_mois      ?? 0,
+      permis_expirant_30j:   permis_expirant_30j   ?? 0,
+      conducteurs_suspendus: conducteurs_suspendus  ?? 0,
+      conducteurs_en_attente: conducteurs_en_attente ?? 0,
     },
     dernieresInfractions: (dernieresInfractions ?? []) as unknown as Infraction[],
     chartData: Object.entries(weekMap).map(([semaine, v]) => ({ semaine, ...v })).slice(-8),
@@ -126,12 +129,13 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* 4 Cartes stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatsCard titre="Conducteurs actifs"      valeur={stats.conducteurs_actifs}    icone="Users"          couleur="green" description="Sur le site ce mois"    delay={0}   href="/conducteurs?statut=actif" />
-        <StatsCard titre="Infractions du mois"     valeur={stats.infractions_mois}      icone="AlertTriangle"  couleur="amber" description="Depuis le 1er du mois"  delay={100} href="/infractions?statut=declaree" />
-        <StatsCard titre="Permis expirant (30j)"   valeur={stats.permis_expirant_30j}   icone="CreditCard"     couleur="red"   description="Renouvellement requis"  delay={200} href="/permis" />
-        <StatsCard titre="Conducteurs suspendus"   valeur={stats.conducteurs_suspendus} icone="ShieldX"        couleur="red"   description="Interdits de conduite"  delay={300} href="/conducteurs?statut=suspendu" />
+      {/* 5 Cartes stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+        <StatsCard titre="Conducteurs actifs"      valeur={stats.conducteurs_actifs}       icone="Users"          couleur="green"  description="Autorisés à conduire"    delay={0}   href="/conducteurs?statut=actif" />
+        <StatsCard titre="En attente validation"   valeur={stats.conducteurs_en_attente}   icone="Clock"          couleur="amber"  description="Workflow N1→N2→N3"       delay={50}  href="/conducteurs?statut=en_attente" />
+        <StatsCard titre="Infractions du mois"     valeur={stats.infractions_mois}         icone="AlertTriangle"  couleur="amber"  description="Depuis le 1er du mois"   delay={100} href="/infractions?statut=declaree" />
+        <StatsCard titre="Permis expirant (30j)"   valeur={stats.permis_expirant_30j}      icone="CreditCard"     couleur="red"    description="Renouvellement requis"   delay={200} href="/permis" />
+        <StatsCard titre="Conducteurs suspendus"   valeur={stats.conducteurs_suspendus}    icone="ShieldX"        couleur="red"    description="Interdits de conduite"   delay={300} href="/conducteurs?statut=suspendu" />
       </div>
 
       {/* Graphique + Indicateurs */}

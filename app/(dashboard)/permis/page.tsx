@@ -30,12 +30,14 @@ export default async function PermisPage({ searchParams }: PageProps) {
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
+
+  const admin2 = createAdminClient()
   const { data: me } = user
-    ? await supabase.from('utilisateurs').select('role').eq('id', user.id).single()
+    ? await admin2.from('utilisateurs').select('role').eq('id', user.id).single()
     : { data: null }
   const canGerer = ['admin', 'hse', 'sst'].includes((me as any)?.role ?? '')
 
-  let query = supabase
+  let query = admin2
     .from('permis_internes')
     .select('*, conducteurs(id, nom, prenom, matricule, entreprises(nom))')
     .order('created_at', { ascending: false })

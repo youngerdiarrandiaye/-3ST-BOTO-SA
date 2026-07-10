@@ -61,6 +61,12 @@ export default function JaugePoints({ points, compact = false, animated = false 
       <p className="text-xs font-medium" style={{ color: couleur }}>
         {points > 10 ? 'Capital intact' : points > 5 ? 'Attention requise' : 'Risque élevé'}
       </p>
+      {points < 1 && (
+        <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md
+          bg-[#EF4444]/15 border border-[#EF4444]/40 text-[#EF4444]">
+          Conduite interdite
+        </span>
+      )}
     </div>
   )
 }

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Plus, X, Check, Eye, EyeOff, HardHat, ShieldCheck } from 'lucide-react'
+import { toastSuccess } from '@/lib/toast'
 
 interface Utilisateur {
   id: string
@@ -68,6 +69,7 @@ export default function CreateUserForm({ onCreated }: Props) {
       service:   form.role === 'agent' ? form.service : null,
     })
 
+    toastSuccess.utilisateurCree(`${form.prenom} ${form.nom}`)
     setForm({ email: '', password: '', nom: '', prenom: '', role: 'hse', telephone: '', service: '3st' })
     setOpen(false)
     setLoading(false)

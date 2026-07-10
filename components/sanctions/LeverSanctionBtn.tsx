@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { ShieldCheck, X, Loader2, AlertTriangle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { toastSuccess, toastError } from '@/lib/toast'
 
 interface Props {
   sanctionId: string
@@ -31,9 +32,11 @@ export default function LeverSanctionBtn({ sanctionId, conducteurId, type, levee
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Erreur serveur')
+      toastSuccess.sanctionLevee()
       setOpen(false)
       router.refresh()
     } catch (e: any) {
+      toastError.erreurServeur()
       setErreur(e.message)
     } finally {
       setLoading(false)

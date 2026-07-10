@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Pencil, X, Loader2, Save } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import type { Conducteur, StatutConducteur, ZoneValidite } from '@/lib/types'
+import { toastSuccess, toastError } from '@/lib/toast'
 
 interface Entreprise {
   id: string
@@ -29,11 +30,19 @@ const ZONES: { value: ZoneValidite; label: string }[] = [
   { value: 'les_deux',       label: 'Toutes les zones' },
 ]
 
+const TYPES_ZONE = [
+  'Zone usine',
+  'Zone mine',
+  'Zone administrative',
+  'Zone chantier',
+  'Zone dépôt',
+  'Toutes zones',
+]
+
 export default function EditConducteurBtn({ conducteur, entreprises, canChangeStatut }: Props) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [erreur, setErreur] = useState<string | null>(null)
 
   const [nom,           setNom]           = useState(conducteur.nom)
   const [prenom,        setPrenom]        = useState(conducteur.prenom)
@@ -45,6 +54,10 @@ export default function EditConducteurBtn({ conducteur, entreprises, canChangeSt
   // V2
   const [fonction,       setFonction]       = useState(conducteur.fonction ?? '')
   const [zoneValidite,   setZoneValidite]   = useState<ZoneValidite | ''>(conducteur.zone_validite ?? '')
+  const [typeZone,       setTypeZone]       = useState(conducteur.type_zone ?? '')
+  const [estTemp,        setEstTemp]        = useState(conducteur.est_temporaire ?? false)
+  const [dateDebut,      setDateDebut]      = useState(conducteur.date_debut_autorisation ?? '')
+  const [dateFin,        setDateFin]        = useState(conducteur.date_fin_autorisation ?? '')
   const [valSst,         setValSst]         = useState(conducteur.validation_sst)
   const [dateSst,        setDateSst]        = useState(conducteur.date_validation_sst ?? '')
   const [valClinique,    setValClinique]    = useState(conducteur.validation_clinique)
@@ -62,23 +75,25 @@ export default function EditConducteurBtn({ conducteur, entreprises, canChangeSt
     setStatut(conducteur.statut)
     setFonction(conducteur.fonction ?? '')
     setZoneValidite(conducteur.zone_validite ?? '')
+    setTypeZone(conducteur.type_zone ?? '')
+    setEstTemp(conducteur.est_temporaire ?? false)
+    setDateDebut(conducteur.date_debut_autorisation ?? '')
+    setDateFin(conducteur.date_fin_autorisation ?? '')
     setValSst(conducteur.validation_sst)
     setDateSst(conducteur.date_validation_sst ?? '')
     setValClinique(conducteur.validation_clinique)
     setDateClinique(conducteur.date_validation_clinique ?? '')
     setUrgNom(conducteur.contact_urgence_nom ?? '')
     setUrgTel(conducteur.contact_urgence_tel ?? '')
-    setErreur(null)
   }
 
   async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!nom.trim() || !prenom.trim()) {
-      setErreur('Nom et prénom sont obligatoires.')
+      toastError.champObligatoire('Nom et prénom')
       return
     }
     setLoading(true)
-    setErreur(null)
     try {
       const res = await fetch(`/api/conducteurs/${conducteur.id}`, {
         method: 'PATCH',
@@ -94,6 +109,10 @@ export default function EditConducteurBtn({ conducteur, entreprises, canChangeSt
           // V2
           fonction:                  fonction.trim() || null,
           zone_validite:             zoneValidite    || null,
+          type_zone:                 typeZone        || null,
+          est_temporaire:            estTemp,
+          date_debut_autorisation:   dateDebut       || null,
+          date_fin_autorisation:     estTemp ? (dateFin || null) : null,
           validation_sst:            valSst,
           date_validation_sst:       valSst    ? (dateSst     || null) : null,
           validation_clinique:       valClinique,
@@ -103,11 +122,23 @@ export default function EditConducteurBtn({ conducteur, entreprises, canChangeSt
         }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Erreur serveur')
+      if (!res.ok) {
+        if (res.status === 403) toastError.rlsRefus()
+        else toastError.erreurServeur()
+        return
+      }
       setOpen(false)
+      const fullName = `${prenom.trim()} ${nom.trim()}`
+      if (canChangeStatut && statut !== conducteur.statut) {
+        if (statut === 'suspendu') toastSuccess.conducteurSuspendu(fullName)
+        else if (statut === 'actif') toastSuccess.conducteurReactive(fullName)
+        else toastSuccess.conducteurModifie(fullName)
+      } else {
+        toastSuccess.conducteurModifie(fullName)
+      }
       router.refresh()
-    } catch (e: any) {
-      setErreur(e.message)
+    } catch {
+      toastError.erreurServeur()
     } finally {
       setLoading(false)
     }
@@ -274,6 +305,40 @@ export default function EditConducteurBtn({ conducteur, entreprises, canChangeSt
                       {ZONES.map(z => <option key={z.value} value={z.value}>{z.label}</option>)}
                     </select>
                   </div>
+                  <div>
+                    <label className={labelCls}>Type de zone</label>
+                    <select value={typeZone} onChange={e => setTypeZone(e.target.value)}
+                      className={`${inputCls} cursor-pointer`}>
+                      <option value="">Non défini</option>
+                      {TYPES_ZONE.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Am. 4 — Autorisation temporaire */}
+              <div className="pt-3 border-t border-[#30363D] space-y-3">
+                <p className="text-[10px] font-semibold text-[#8B949E] uppercase tracking-wider">Autorisation de conduite</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelCls}>Date de début</label>
+                    <input type="date" value={dateDebut} onChange={e => setDateDebut(e.target.value)}
+                      className={`${inputCls} [color-scheme:dark]`} />
+                  </div>
+                  <div className="flex items-end pb-1">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={estTemp} onChange={e => setEstTemp(e.target.checked)}
+                        className="w-4 h-4 accent-[#F59E0B] cursor-pointer" />
+                      <span className="text-xs text-[#F0F6FC]">Conducteur temporaire</span>
+                    </label>
+                  </div>
+                  {estTemp && (
+                    <div className="col-span-2">
+                      <label className={labelCls}>Date de fin</label>
+                      <input type="date" value={dateFin} onChange={e => setDateFin(e.target.value)}
+                        className={`${inputCls} [color-scheme:dark]`} />
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -319,11 +384,6 @@ export default function EditConducteurBtn({ conducteur, entreprises, canChangeSt
                 </div>
               </div>
 
-              {erreur && (
-                <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
-                  {erreur}
-                </p>
-              )}
             </form>
 
             {/* Footer */}

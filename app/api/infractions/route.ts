@@ -23,6 +23,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Champs requis manquants' }, { status: 400 })
   }
 
+  // Validation date : ne peut pas être dans le futur
+  if (new Date(date_heure) > new Date()) {
+    return NextResponse.json({ error: 'La date/heure ne peut pas être dans le futur' }, { status: 400 })
+  }
+
   const admin = createAdminClient()
 
   const { data: typeInf } = await admin

@@ -6,7 +6,7 @@ import BadgeStatut from '@/components/conducteurs/BadgeStatut'
 import JaugePoints from '@/components/conducteurs/JaugePoints'
 import OngletsConducteur from '@/components/conducteurs/OngletsConducteur'
 import EditConducteurBtn from '@/components/conducteurs/EditConducteurBtn'
-import type { Conducteur } from '@/lib/types'
+import type { Conducteur, RoleUtilisateur } from '@/lib/types'
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -92,6 +92,18 @@ export default async function FicheConducteurPage({ params }: PageProps) {
                   {c.matricule}
                 </span>
                 <span className="text-sm text-[#8B949E]">{c.entreprises?.nom ?? '—'}</span>
+                {c.type_zone && (
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full
+                    bg-[#F59E0B]/10 border border-[#F59E0B]/25 text-[#F59E0B]">
+                    {c.type_zone}
+                  </span>
+                )}
+                {c.est_temporaire && (
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full
+                    bg-amber-500/10 border border-amber-500/25 text-amber-400">
+                    Temporaire
+                  </span>
+                )}
                 {c.date_naissance && (
                   <span className="text-sm text-[#8B949E]">
                     Né le {new Date(c.date_naissance).toLocaleDateString('fr-FR')}
@@ -216,16 +228,32 @@ export default async function FicheConducteurPage({ params }: PageProps) {
         historique={historique ?? []}
         tests={tests ?? []}
         conducteurId={id}
+        userRole={role as RoleUtilisateur}
         conducteur={{
-          validation_sst:           c.validation_sst,
-          date_validation_sst:      c.date_validation_sst,
-          validation_clinique:      c.validation_clinique,
-          date_validation_clinique: c.date_validation_clinique,
+          statut:                     c.statut,
+          niveau_validation_courant:  (c as any).niveau_validation_courant  ?? 1,
+          // Niveau 1
+          validation_resp_dept:       (c as any).validation_resp_dept       ?? false,
+          date_validation_resp_dept:  (c as any).date_validation_resp_dept  ?? null,
+          nom_resp_dept:              (c as any).nom_resp_dept               ?? null,
+          motif_refus_dept:           (c as any).motif_refus_dept            ?? null,
+          // Niveau 2
+          autorisation_resp_sst:      (c as any).autorisation_resp_sst      ?? false,
+          date_autorisation_resp_sst: (c as any).date_autorisation_resp_sst ?? null,
+          nom_resp_sst:               (c as any).nom_resp_sst                ?? null,
+          motif_refus_resp_sst:       (c as any).motif_refus_resp_sst        ?? null,
+          // Niveau 3
+          autorisation_clinique:      (c as any).autorisation_clinique      ?? false,
+          date_autorisation_clinique: (c as any).date_autorisation_clinique  ?? null,
+          medecin_clinique:           (c as any).medecin_clinique            ?? null,
+          valideur_clinique:          (c as any).valideur_clinique           ?? null,
+          motif_refus_clinique:       (c as any).motif_refus_clinique        ?? null,
         }}
         canTraiter={canTraiter}
         canLever={canLever}
         canGererPermis={canPermis}
         canGererTests={canGererTests}
+        canWrite={canEdit}
       />
 
     </div>

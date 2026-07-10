@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import { AlertTriangle } from 'lucide-react'
 import InfractionsTableClient from '@/components/infractions/InfractionsTableClient'
@@ -14,15 +15,17 @@ export default async function InfractionsPage({ searchParams }: PageProps) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
+  const admin = createAdminClient()
+
   const meResult = user
-    ? await supabase.from('utilisateurs').select('role').eq('id', user.id).single()
+    ? await admin.from('utilisateurs').select('role').eq('id', user.id).single()
     : { data: null }
 
   const role = meResult.data?.role ?? 'agent'
   const canTraiter = ['admin', 'hse', 'sst'].includes(role)
   const isAgent = role === 'agent'
 
-  let query = supabase
+  let query = admin
     .from('infractions')
     .select('*, conducteurs(nom, prenom, matricule), types_infraction(code, libelle, gravite, points_retires), utilisateurs(nom, prenom, service)')
     .order('date_heure', { ascending: false })

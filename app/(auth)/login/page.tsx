@@ -4,24 +4,23 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Spinner from '@/components/ui/Spinner'
+import { toastError } from '@/lib/toast'
 
 export default function LoginPage() {
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setError('')
     setLoading(true)
 
     const supabase = createClient()
     const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
 
     if (authError) {
-      setError('Identifiants incorrects. Contactez votre administrateur.')
+      toastError.connexionEchouee()
       setLoading(false)
       return
     }
@@ -76,12 +75,6 @@ export default function LoginPage() {
                 transition-colors duration-150"
             />
           </div>
-
-          {error && (
-            <div className="px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
-              {error}
-            </div>
-          )}
 
           <button
             type="submit"

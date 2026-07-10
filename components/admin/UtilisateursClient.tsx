@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Users, Shield } from 'lucide-react'
 import CreateUserForm from './CreateUserForm'
+import { toastSuccess, toastError } from '@/lib/toast'
 
 interface Utilisateur {
   id: string
@@ -50,7 +51,13 @@ export default function UtilisateursClient({ utilisateurs: initial, currentUserI
       body: JSON.stringify({ actif: !actif }),
     })
     if (res.ok) {
+      const u = utilisateurs.find(u => u.id === id)
+      const nom = u ? `${u.prenom} ${u.nom}` : ''
+      if (!actif) toastSuccess.utilisateurActive(nom)
+      else toastSuccess.utilisateurDesactive(nom)
       setUtilisateurs(prev => prev.map(u => u.id === id ? { ...u, actif: !actif } : u))
+    } else {
+      toastError.erreurServeur()
     }
   }
 

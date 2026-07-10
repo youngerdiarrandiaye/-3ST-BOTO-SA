@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation'
 import {
   LayoutDashboard, Users, CreditCard, AlertTriangle,
   GraduationCap, ShieldX, BarChart2, Building2,
-  LogOut, Menu, X, ShieldCheck, UserCog, Settings, ScanLine,
+  LogOut, Menu, X, ShieldCheck, UserCog, Settings, ScanLine, KeyRound,
 } from 'lucide-react'
 import { useState } from 'react'
 import type { RoleUtilisateur } from '@/lib/types'
@@ -146,6 +146,13 @@ export default function Sidebar({ userNom, userPrenom, userRole }: SidebarProps)
               {userRole ? ROLE_LABELS[userRole] : '—'}
             </p>
           </div>
+          <Link
+            href="/profil/mot-de-passe"
+            className="flex-shrink-0 p-1.5 rounded-md text-[#8B949E] hover:text-[#F59E0B] hover:bg-[#F59E0B]/10 transition-colors cursor-pointer"
+            title="Changer mon mot de passe"
+          >
+            <KeyRound size={15} />
+          </Link>
           <button
             onClick={handleLogout}
             className="flex-shrink-0 p-1.5 rounded-md text-[#8B949E] hover:text-[#EF4444] hover:bg-red-500/10 transition-colors cursor-pointer"

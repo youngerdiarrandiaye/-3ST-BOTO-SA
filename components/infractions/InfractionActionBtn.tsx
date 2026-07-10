@@ -7,6 +7,7 @@ import {
   CheckCircle2, RotateCcw, XCircle, ShieldOff, Pencil,
   X, Loader2, AlertTriangle, Gavel, ChevronRight, Eye,
 } from 'lucide-react'
+import { toastSuccess } from '@/lib/toast'
 
 interface Props {
   infractionId: string
@@ -71,6 +72,12 @@ export default function InfractionActionBtn({
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Erreur serveur')
+      if (nextStatut === 'annulee') toastSuccess.infractionAnnulee()
+      else if (nextStatut === 'contestee') toastSuccess.infractionContestee()
+      else if (nextStatut === 'traitee') {
+        if (modal === 'cloturer') toastSuccess.infractionCloturee()
+        else toastSuccess.infractionTraitee()
+      }
       close(); router.refresh()
     } catch (e: any) { setErreur(e.message) }
     finally { setLoading(false) }
@@ -93,6 +100,7 @@ export default function InfractionActionBtn({
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Erreur serveur')
+      toastSuccess.infractionModifiee()
       close(); router.refresh()
     } catch (e: any) { setErreur(e.message) }
     finally { setLoading(false) }

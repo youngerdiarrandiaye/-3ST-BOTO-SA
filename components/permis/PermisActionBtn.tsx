@@ -1,9 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { PauseCircle, XCircle, PlayCircle, Loader2, X, RefreshCw, CheckCircle2 } from 'lucide-react'
+import { PauseCircle, XCircle, PlayCircle, Loader2, X, RefreshCw } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { toastSuccess, toastError } from '@/lib/toast'
 
 interface Props {
   permisId: string
@@ -54,12 +55,11 @@ const A_EXPIRER: Action = {
 
 export default function PermisActionBtn({ permisId, statut, conducteurId, dateExpiration }: Props) {
   const router = useRouter()
-  const [open, setOpen]           = useState(false)
-  const [chosen, setChosen]       = useState<Action | null>(null)
-  const [loading, setLoading]     = useState(false)
-  const [erreur, setErreur]       = useState<string | null>(null)
-  const [motif, setMotif]         = useState('')
-  const [successMsg, setSuccessMsg] = useState<string | null>(null)
+  const [open, setOpen]       = useState(false)
+  const [chosen, setChosen]   = useState<Action | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [erreur, setErreur]   = useState<string | null>(null)
+  const [motif, setMotif]     = useState('')
 
   const isDateExpired = !!dateExpiration && new Date(dateExpiration) < new Date()
 
@@ -83,7 +83,6 @@ export default function PermisActionBtn({ permisId, statut, conducteurId, dateEx
     setChosen(action)
     setErreur(null)
     setMotif('')
-    setSuccessMsg(null)
     setOpen(true)
   }
 
@@ -104,29 +103,25 @@ export default function PermisActionBtn({ permisId, statut, conducteurId, dateEx
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Erreur serveur')
 
-      const label = STATUT_LABEL[chosen.nextStatut] ?? 'mis à jour'
-      setSuccessMsg(`Permis ${label} avec succès.`)
-      setTimeout(() => {
-        setOpen(false)
-        setSuccessMsg(null)
-        router.refresh()
-      }, 1800)
+      if (chosen.nextStatut === 'suspendu') toastSuccess.permisSuspendu()
+      else if (chosen.nextStatut === 'retire') toastSuccess.permisRetire()
+      else if (chosen.nextStatut === 'valide') toastSuccess.permisReactive()
+      else if (chosen.nextStatut === 'expire') toastSuccess.permisExpire()
+      setOpen(false)
+      router.refresh()
     } catch (e: any) {
       const msg: string = e.message ?? ''
-      // Transition impossible : déjà dans cet état ou bloqué
-      if (msg.includes('déjà retiré')) {
-        setErreur('Ce permis est déjà retiré. La page va être actualisée.')
+      if (
+        msg.includes('déjà retiré') || msg.includes('déjà expiré') ||
+        msg.includes('déjà suspendu') || msg.includes('Transition invalide') ||
+        msg.includes('impossible')
+      ) {
+        setErreur(msg.includes('Transition') || msg.includes('impossible')
+          ? "Cette action n'est plus disponible — le statut a changé. La page va être actualisée."
+          : `${msg}. La page va être actualisée.`)
         setTimeout(() => { setOpen(false); router.refresh() }, 2000)
-      } else if (msg.includes('déjà expiré')) {
-        setErreur('Ce permis est déjà expiré. La page va être actualisée.')
-        setTimeout(() => { setOpen(false); router.refresh() }, 2000)
-      } else if (msg.includes('déjà suspendu')) {
-        setErreur('Ce permis est déjà suspendu. La page va être actualisée.')
-        setTimeout(() => { setOpen(false); router.refresh() }, 2000)
-      } else if (msg.includes('Transition invalide') || msg.includes('impossible')) {
-        setErreur('Cette action n\'est plus disponible — le statut a changé. La page va être actualisée.')
-        setTimeout(() => { setOpen(false); router.refresh() }, 2200)
       } else {
+        toastError.erreurServeur()
         setErreur(msg)
       }
     } finally {
@@ -161,32 +156,23 @@ export default function PermisActionBtn({ permisId, statut, conducteurId, dateEx
       {open && chosen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm cursor-pointer"
-          onClick={() => !loading && !successMsg && setOpen(false)}
+          onClick={() => !loading && setOpen(false)}
         >
           <div
             className="bg-[#161B22] border border-[#30363D] rounded-xl w-full max-w-sm p-6 shadow-2xl"
             onClick={e => e.stopPropagation()}
           >
-            {successMsg ? (
-              /* Vue succès */
-              <div className="flex flex-col items-center gap-3 py-2">
-                <CheckCircle2 size={36} className="text-green-400" />
-                <p className="text-sm font-semibold text-green-400 text-center">{successMsg}</p>
-                <p className="text-xs text-[#8B949E]">Actualisation en cours…</p>
+            <>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base font-bold text-[#F0F6FC]">{chosen.label} le permis</h3>
+                <button
+                  onClick={() => setOpen(false)}
+                  disabled={loading}
+                  className="cursor-pointer p-1.5 text-[#8B949E] hover:text-[#F0F6FC] rounded-md hover:bg-[#21262D] transition-colors"
+                >
+                  <X size={16} />
+                </button>
               </div>
-            ) : (
-              /* Vue confirmation */
-              <>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-base font-bold text-[#F0F6FC]">{chosen.label} le permis</h3>
-                  <button
-                    onClick={() => setOpen(false)}
-                    disabled={loading}
-                    className="cursor-pointer p-1.5 text-[#8B949E] hover:text-[#F0F6FC] rounded-md hover:bg-[#21262D] transition-colors"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
 
                 <p className="text-sm text-[#F0F6FC]/70 leading-relaxed mb-4">
                   {chosen.confirmMsg}
@@ -232,7 +218,6 @@ export default function PermisActionBtn({ permisId, statut, conducteurId, dateEx
                   </button>
                 </div>
               </>
-            )}
           </div>
         </div>
       )}

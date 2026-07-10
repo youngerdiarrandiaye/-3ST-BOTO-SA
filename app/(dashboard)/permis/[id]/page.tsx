@@ -160,8 +160,8 @@ export default async function PermisDetailPage({ params }: PageProps) {
           )}
         </div>
         <div className="bg-[#161B22] border border-[#30363D] rounded-xl p-5">
-          <p className="text-[10px] text-[#8B949E] uppercase tracking-wider font-semibold mb-3">Type permis site</p>
-          <p className="text-sm font-semibold text-[#F0F6FC]">{permis.type_permis_site ?? '—'}</p>
+          <p className="text-[10px] text-[#8B949E] uppercase tracking-wider font-semibold mb-3">Type de zone</p>
+          <p className="text-sm font-semibold text-[#F0F6FC]">{permis.type_zone ?? '—'}</p>
         </div>
       </div>
 

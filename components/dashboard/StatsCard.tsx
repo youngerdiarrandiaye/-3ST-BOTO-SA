@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Users, AlertTriangle, CreditCard, ShieldX, TrendingUp, TrendingDown } from 'lucide-react'
+import { Users, AlertTriangle, CreditCard, ShieldX, TrendingUp, TrendingDown, Clock } from 'lucide-react'
 import Link from 'next/link'
 
-const ICONS = { Users, AlertTriangle, CreditCard, ShieldX, TrendingUp, TrendingDown }
+const ICONS = { Users, AlertTriangle, CreditCard, ShieldX, TrendingUp, TrendingDown, Clock }
 
 type IconKey = keyof typeof ICONS
 

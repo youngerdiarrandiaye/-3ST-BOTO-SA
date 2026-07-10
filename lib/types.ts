@@ -1,5 +1,5 @@
 export type RoleUtilisateur  = 'admin' | 'hse' | 'sst' | 'direction' | 'agent'
-export type StatutConducteur = 'actif' | 'suspendu' | 'retire' | 'inactif'
+export type StatutConducteur = 'actif' | 'suspendu' | 'retire' | 'inactif' | 'en_attente' | 'refuse'
 export type StatutPermis     = 'valide' | 'suspendu' | 'retire' | 'expire'
 export type GraviteInfraction = 'mineure' | 'majeure' | 'critique' | 'eliminatoire'
 export type TypeSanction     = 'suspension_temp' | 'retrait_definitif'
@@ -57,8 +57,31 @@ export interface Conducteur {
   validation_clinique: boolean
   date_validation_clinique: string | null
   zone_validite: ZoneValidite | null
+  type_zone: string | null
+  // Am. 4 — temporaire
+  est_temporaire: boolean
+  date_debut_autorisation: string | null
+  date_fin_autorisation: string | null
   contact_urgence_nom: string | null
   contact_urgence_tel: string | null
+  // Workflow validation 3 niveaux (v11)
+  niveau_validation_courant: number
+  // Niveau 1 — Responsable département
+  validation_resp_dept: boolean
+  date_validation_resp_dept: string | null
+  nom_resp_dept: string | null
+  motif_refus_dept: string | null
+  // Niveau 2 — Responsable SST
+  autorisation_resp_sst: boolean
+  date_autorisation_resp_sst: string | null
+  nom_resp_sst: string | null
+  motif_refus_resp_sst: string | null
+  // Niveau 3 — Clinique
+  autorisation_clinique: boolean
+  date_autorisation_clinique: string | null
+  medecin_clinique: string | null
+  valideur_clinique: string | null
+  motif_refus_clinique: string | null
   created_at: string
   updated_at: string
   entreprises?: { nom: string }
@@ -76,7 +99,7 @@ export interface PermisInterne {
   delivre_par: string | null
   // V2
   zone_validite: ZoneValidite | null
-  type_permis_site: string | null
+  type_zone: string | null
   validation_sst: boolean
   validation_clinique: boolean
   motif_changement?: string | null
@@ -171,6 +194,7 @@ export interface Formation {
   statut: StatutFormation
   valide_par: string | null
   // V2
+  heures_validees: number | null
   theme: string | null
   formateur_nom: string | null
   formateur_qualif: string | null

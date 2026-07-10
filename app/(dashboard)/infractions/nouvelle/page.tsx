@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
@@ -16,18 +17,19 @@ export default async function NouvelleInfractionPage({ searchParams }: PageProps
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: me } = await supabase.from('utilisateurs').select('role').eq('id', user.id).single()
+  const admin = createAdminClient()
+  const { data: me } = await admin.from('utilisateurs').select('role').eq('id', user.id).single()
   if (!['admin', 'hse', 'sst', 'agent'].includes(me?.role ?? '')) redirect('/dashboard')
 
   const [{ data: conducteurs }, { data: typesInfraction }] = await Promise.all([
-    supabase
+    admin
       .from('conducteurs')
-      .select('id, matricule, nom, prenom')
-      .eq('statut', 'actif')
+      .select('id, matricule, nom, prenom, statut, points_actuels, fonction, entreprises(nom)')
+      .in('statut', ['actif', 'suspendu'])
       .order('nom'),
-    supabase
+    admin
       .from('types_infraction')
-      .select('id, code, libelle, gravite, points_retires, zone_applicable')
+      .select('id, code, libelle, gravite, points_retires, zone_applicable, suspend_auto, retrait_definitif_auto')
       .eq('actif', true)
       .order('gravite')
       .order('code'),

@@ -161,10 +161,10 @@ export default async function PrintPermisPage({ params }: PageProps) {
                         {ZONE_LABEL[permis.zone_validite ?? ''] ?? '—'}
                       </p>
                     </div>
-                    {permis.type_permis_site && (
+                    {permis.type_zone && (
                       <div className="bg-[#F9FAFB] rounded-lg px-3 py-2.5 border border-[#E5E7EB] col-span-2">
-                        <p className="text-[10px] text-[#6B7280] uppercase font-semibold tracking-wide mb-1">Type</p>
-                        <p className="text-sm font-semibold text-[#0D1117]">{permis.type_permis_site}</p>
+                        <p className="text-[10px] text-[#6B7280] uppercase font-semibold tracking-wide mb-1">Type de zone</p>
+                        <p className="text-sm font-semibold text-[#0D1117]">{permis.type_zone}</p>
                       </div>
                     )}
                   </div>

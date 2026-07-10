@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Building2, Plus, X, Check, AlertTriangle, Search, ChevronLeft, ChevronRight } from 'lucide-react'
 import Spinner from '@/components/ui/Spinner'
+import { toastSuccess, toastError } from '@/lib/toast'
 
 const PAGE_SIZE = 15
 
@@ -76,11 +77,13 @@ export default function EntreprisesClient({ entreprises: initial, canCreate = fa
     setCreating(false)
     if (!res.ok) {
       const d = await res.json().catch(() => ({}))
+      toastError.erreurServeur()
       setCreateErr(d.error ?? 'Erreur serveur')
       return
     }
 
     const data = await res.json()
+    toastSuccess.entrepriseCreee(createForm.nom.trim())
     setEntreprises(prev => [...prev, data as Entreprise].sort((a, b) => a.nom.localeCompare(b.nom)))
     setCreateForm(EMPTY_FORM)
     setShowCreate(false)
@@ -94,7 +97,12 @@ export default function EntreprisesClient({ entreprises: initial, canCreate = fa
       body: JSON.stringify({ actif: !actif }),
     })
     if (res.ok) {
+      const nom = entreprises.find(ent => ent.id === id)?.nom ?? ''
+      if (!actif) toastSuccess.entrepriseActivee(nom)
+      else toastSuccess.entrepriseDesactivee(nom)
       setEntreprises(prev => prev.map(ent => ent.id === id ? { ...ent, actif: !actif } : ent))
+    } else {
+      toastError.erreurServeur()
     }
   }
 

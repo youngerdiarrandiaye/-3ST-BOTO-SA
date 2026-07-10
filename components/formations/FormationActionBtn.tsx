@@ -6,6 +6,7 @@ import {
   CheckCircle2, XCircle, RotateCcw,
   X, Loader2, AlertTriangle, Star,
 } from 'lucide-react'
+import { toastSuccess } from '@/lib/toast'
 
 interface Props {
   formationId: string
@@ -42,6 +43,9 @@ export default function FormationActionBtn({ formationId, statut, role, pointsRe
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Erreur serveur')
+      if (nextStatut === 'validee') toastSuccess.formationValidee(extraPts ?? pointsRecuperes)
+      else if (nextStatut === 'annulee') toastSuccess.formationAnnulee()
+      else if (nextStatut === 'en_cours') toastSuccess.formationReactivee()
       close(); router.refresh()
     } catch (e: any) { setErreur(e.message) }
     finally { setLoading(false) }

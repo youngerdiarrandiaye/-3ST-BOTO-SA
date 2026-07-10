@@ -50,7 +50,8 @@ export default async function InfractionDetailPage({ params }: PageProps) {
         *,
         conducteurs(id, nom, prenom, matricule, entreprises(nom)),
         types_infraction(code, libelle, gravite, points_retires, zone_applicable),
-        utilisateurs(nom, prenom, service)
+        utilisateurs(nom, prenom, service),
+        temoins(id, nom, prenom, matricule, telephone, declaration)
       `)
       .eq('id', id)
       .single(),
@@ -67,7 +68,7 @@ export default async function InfractionDetailPage({ params }: PageProps) {
   const c = inf.conducteurs as any
   const t = inf.types_infraction as any
   const u = inf.utilisateurs as any
-  const temoins: any[] = Array.isArray(inf.temoins) ? inf.temoins : []
+  const temoins: any[] = Array.isArray((inf as any).temoins) ? (inf as any).temoins : []
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">

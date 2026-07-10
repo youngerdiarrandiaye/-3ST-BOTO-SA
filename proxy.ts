@@ -23,17 +23,21 @@ export async function proxy(request: NextRequest) {
     }
   )
 
-  // Rafraîchit la session Supabase (httpOnly cookies)
+  const pathname = request.nextUrl.pathname
+
+  // Les routes API gèrent leur propre authentification (via createClient dans le handler)
+  // Le proxy ne les bloque pas — il se contente de rafraîchir la session dans les cookies
+  if (pathname.startsWith('/api/')) {
+    await supabase.auth.getUser()
+    return supabaseResponse
+  }
+
+  // Pour les pages : valider la session et rediriger si non authentifié
   const { data: { user } } = await supabase.auth.getUser()
 
-  const pathname = request.nextUrl.pathname
-  const isPublic = pathname.startsWith('/login') || pathname.startsWith('/api/auth')
+  const isPublic = pathname.startsWith('/login')
 
   if (!user && !isPublic) {
-    // API routes expect JSON — return 401 instead of redirecting to the login HTML page
-    if (pathname.startsWith('/api/')) {
-      return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
-    }
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)

@@ -26,10 +26,12 @@ export async function PATCH(
   const {
     nom, prenom, date_naissance, permis_national, permis_civil_autorite, entreprise_id, statut,
     // V2
-    fonction, type_permis_conduite, zone_validite,
+    fonction, type_permis_conduite, zone_validite, type_zone,
     validation_sst, date_validation_sst,
     validation_clinique, date_validation_clinique,
     contact_urgence_nom, contact_urgence_tel,
+    // Am. 4 — temporaire
+    est_temporaire, date_debut_autorisation, date_fin_autorisation,
   } = body
 
   if (!nom?.trim() || !prenom?.trim() || !entreprise_id) {
@@ -60,6 +62,10 @@ export async function PATCH(
     fonction:                  fonction?.trim() || null,
     type_permis_conduite:      Array.isArray(type_permis_conduite) ? type_permis_conduite : [],
     zone_validite:             zone_validite || null,
+    type_zone:                 type_zone     || null,
+    est_temporaire:            Boolean(est_temporaire),
+    date_debut_autorisation:   date_debut_autorisation || null,
+    date_fin_autorisation:     est_temporaire ? (date_fin_autorisation || null) : null,
     validation_sst:            sst_ok,
     date_validation_sst:       sst_ok ? (date_validation_sst || null) : null,
     validation_clinique:       clinique_ok,

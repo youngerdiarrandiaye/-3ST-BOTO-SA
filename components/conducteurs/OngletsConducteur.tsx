@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import BadgeStatut from './BadgeStatut'
 import QrCodeDisplay from './QrCodeDisplay'
@@ -13,7 +12,10 @@ import { useRealtimeRefresh } from '@/lib/hooks/useRealtimeRefresh'
 import { STATUT_FORMATION_LABEL } from '@/lib/labels'
 import NouveauTestBtn from '@/components/tests/NouveauTestBtn'
 import SaisirResultatBtn from '@/components/tests/SaisirResultatBtn'
-import type { PermisInterne, Infraction, Formation, Sanction, TestConduite, StatutPermis } from '@/lib/types'
+import OngletDocuments from './OngletDocuments'
+import ValidationWorkflow from './ValidationWorkflow'
+import type { PermisInterne, Infraction, Formation, Sanction, TestConduite, StatutPermis, RoleUtilisateur } from '@/lib/types'
+
 const STATUT_INF_CLS = {
   declaree:  'bg-blue-500/10   text-blue-400   border-blue-500/20',
   traitee:   'bg-green-500/10  text-green-400  border-green-500/20',
@@ -38,10 +40,25 @@ function fmtDT(iso: string) {
 }
 
 interface ConducteurValidations {
-  validation_sst: boolean
-  date_validation_sst: string | null
-  validation_clinique: boolean
-  date_validation_clinique: string | null
+  statut: string
+  // Workflow 3 niveaux
+  niveau_validation_courant: number
+  // Niveau 1
+  validation_resp_dept: boolean
+  date_validation_resp_dept: string | null
+  nom_resp_dept: string | null
+  motif_refus_dept: string | null
+  // Niveau 2
+  autorisation_resp_sst: boolean
+  date_autorisation_resp_sst: string | null
+  nom_resp_sst: string | null
+  motif_refus_resp_sst: string | null
+  // Niveau 3
+  autorisation_clinique: boolean
+  date_autorisation_clinique: string | null
+  medecin_clinique: string | null
+  valideur_clinique: string | null
+  motif_refus_clinique: string | null
 }
 
 interface Props {
@@ -53,39 +70,26 @@ interface Props {
   tests: TestConduite[]
   conducteurId: string
   conducteur: ConducteurValidations
+  userRole: RoleUtilisateur
   canTraiter?: boolean
   canLever?: boolean
   canGererPermis?: boolean
   canGererTests?: boolean
+  canWrite?: boolean
 }
 
-const ONGLETS = ['Permis', 'Validations', 'Infractions', 'Formations', 'Sanctions', 'Historique points', 'Tests']
+const ONGLETS = ['Permis', 'Validations', 'Infractions', 'Formations', 'Sanctions', 'Historique points', 'Tests', 'Documents']
 
 export default function OngletsConducteur({
   permis, infractions, formations, sanctions, historique, tests,
-  conducteurId, conducteur, canTraiter = false, canLever = false,
-  canGererPermis = false, canGererTests = false,
+  conducteurId, conducteur, userRole,
+  canTraiter = false, canLever = false,
+  canGererPermis = false, canGererTests = false, canWrite = false,
 }: Props) {
   useRealtimeRefresh(['infractions', 'sanctions', 'formations', 'conducteurs', 'permis_internes', 'tests_conduite'])
-  const router = useRouter()
   const [actif, setActif] = useState(0)
-  const [validating, setValidating] = useState<'sst' | 'clinique' | null>(null)
 
-  async function handleValidation(type: 'sst' | 'clinique', value: boolean) {
-    setValidating(type)
-    try {
-      await fetch(`/api/conducteurs/${conducteurId}/validations`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type, value }),
-      })
-      router.refresh()
-    } finally {
-      setValidating(null)
-    }
-  }
-
-  const COUNTS = [permis.length, 0, infractions.length, formations.length, sanctions.length, historique.length, tests.length]
+  const COUNTS = [permis.length, 0, infractions.length, formations.length, sanctions.length, historique.length, tests.length, 0]
 
   return (
     <div className="bg-[#161B22] border border-[#30363D] rounded-xl overflow-hidden">
@@ -168,144 +172,30 @@ export default function OngletsConducteur({
 
         {/* --- VALIDATIONS --- */}
         {actif === 1 && (
-          <div className="space-y-3">
-            <p className="text-xs text-[#8B949E] mb-4">
-              Ces deux validations sont <span className="text-[#F0F6FC] font-semibold">obligatoires</span> avant de pouvoir délivrer un permis interne.
+          <div className="space-y-1">
+            <p className="text-xs text-[#8B949E] mb-5">
+              Processus de validation en <span className="text-[#F0F6FC] font-semibold">3 niveaux hiérarchiques</span> —
+              chaque niveau doit être approuvé avant d&apos;accéder au suivant.
             </p>
-
-            {/* SST */}
-            <div className={`flex items-center justify-between p-4 rounded-lg border ${
-              conducteur.validation_sst
-                ? 'bg-green-500/5 border-green-500/20'
-                : 'bg-[#0D1117] border-[#30363D]'
-            }`}>
-              <div className="flex items-center gap-3">
-                <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-base flex-shrink-0 ${
-                  conducteur.validation_sst ? 'bg-green-500/15' : 'bg-[#21262D]'
-                }`}>
-                  {conducteur.validation_sst ? '✅' : '⬜'}
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-[#F0F6FC]">Habilitation SST</p>
-                  <p className="text-xs text-[#8B949E] mt-0.5">Santé & Sécurité au Travail</p>
-                </div>
-              </div>
-              <div className="flex flex-col items-end gap-2 flex-shrink-0 ml-4">
-                {conducteur.validation_sst ? (
-                  <>
-                    <span className="text-xs px-2.5 py-1 rounded-full bg-green-500/10 text-green-400 border border-green-500/20 font-semibold">
-                      Validée
-                    </span>
-                    {conducteur.date_validation_sst && (
-                      <p className="text-xs text-[#8B949E]">le {fmt(conducteur.date_validation_sst)}</p>
-                    )}
-                    {canGererTests && (
-                      <button
-                        onClick={() => handleValidation('sst', false)}
-                        disabled={validating === 'sst'}
-                        className="text-xs px-2.5 py-1 rounded-lg border border-red-500/20 text-red-400 bg-red-500/5
-                          hover:bg-red-500/15 hover:border-red-500/40 active:scale-[0.97] transition-all cursor-pointer disabled:opacity-40"
-                      >
-                        {validating === 'sst' ? '…' : 'Révoquer'}
-                      </button>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <span className="text-xs px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-semibold">
-                      Non validée
-                    </span>
-                    {canGererTests && (
-                      <button
-                        onClick={() => handleValidation('sst', true)}
-                        disabled={validating === 'sst'}
-                        className="text-xs px-2.5 py-1 rounded-lg border border-green-500/20 text-green-400 bg-green-500/5
-                          hover:bg-green-500/15 hover:border-green-500/40 active:scale-[0.97] transition-all cursor-pointer disabled:opacity-40"
-                      >
-                        {validating === 'sst' ? '…' : 'Valider'}
-                      </button>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* Clinique */}
-            <div className={`flex items-center justify-between p-4 rounded-lg border ${
-              conducteur.validation_clinique
-                ? 'bg-green-500/5 border-green-500/20'
-                : 'bg-[#0D1117] border-[#30363D]'
-            }`}>
-              <div className="flex items-center gap-3">
-                <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-base flex-shrink-0 ${
-                  conducteur.validation_clinique ? 'bg-green-500/15' : 'bg-[#21262D]'
-                }`}>
-                  {conducteur.validation_clinique ? '✅' : '⬜'}
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-[#F0F6FC]">Visite médicale clinique</p>
-                  <p className="text-xs text-[#8B949E] mt-0.5">Certificat médical d&apos;aptitude</p>
-                </div>
-              </div>
-              <div className="flex flex-col items-end gap-2 flex-shrink-0 ml-4">
-                {conducteur.validation_clinique ? (
-                  <>
-                    <span className="text-xs px-2.5 py-1 rounded-full bg-green-500/10 text-green-400 border border-green-500/20 font-semibold">
-                      Validée
-                    </span>
-                    {conducteur.date_validation_clinique && (
-                      <p className="text-xs text-[#8B949E]">le {fmt(conducteur.date_validation_clinique)}</p>
-                    )}
-                    {canGererTests && (
-                      <button
-                        onClick={() => handleValidation('clinique', false)}
-                        disabled={validating === 'clinique'}
-                        className="text-xs px-2.5 py-1 rounded-lg border border-red-500/20 text-red-400 bg-red-500/5
-                          hover:bg-red-500/15 hover:border-red-500/40 active:scale-[0.97] transition-all cursor-pointer disabled:opacity-40"
-                      >
-                        {validating === 'clinique' ? '…' : 'Révoquer'}
-                      </button>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <span className="text-xs px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-semibold">
-                      Non validée
-                    </span>
-                    {canGererTests && (
-                      <button
-                        onClick={() => handleValidation('clinique', true)}
-                        disabled={validating === 'clinique'}
-                        className="text-xs px-2.5 py-1 rounded-lg border border-green-500/20 text-green-400 bg-green-500/5
-                          hover:bg-green-500/15 hover:border-green-500/40 active:scale-[0.97] transition-all cursor-pointer disabled:opacity-40"
-                      >
-                        {validating === 'clinique' ? '…' : 'Valider'}
-                      </button>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* Résumé */}
-            <div className={`mt-2 flex items-center gap-3 p-3.5 rounded-lg border ${
-              conducteur.validation_sst && conducteur.validation_clinique
-                ? 'bg-green-500/5 border-green-500/20 text-green-400'
-                : 'bg-amber-500/5 border-amber-500/20 text-amber-400'
-            }`}>
-              <span className="text-base flex-shrink-0">
-                {conducteur.validation_sst && conducteur.validation_clinique ? '✅' : '⚠️'}
-              </span>
-              <p className="text-xs font-semibold">
-                {conducteur.validation_sst && conducteur.validation_clinique
-                  ? 'Toutes les validations sont complètes — la délivrance du permis est autorisée.'
-                  : `Validations manquantes : ${[
-                      !conducteur.validation_sst && 'SST',
-                      !conducteur.validation_clinique && 'Visite médicale',
-                    ].filter(Boolean).join(' + ')} — impossible de délivrer un permis.`
-                }
-              </p>
-            </div>
+            <ValidationWorkflow
+              conducteurId={conducteurId}
+              userRole={userRole}
+              niveau={conducteur.niveau_validation_courant}
+              statut={conducteur.statut}
+              val_dept={conducteur.validation_resp_dept}
+              date_dept={conducteur.date_validation_resp_dept}
+              nom_dept={conducteur.nom_resp_dept}
+              motif_dept={conducteur.motif_refus_dept}
+              val_sst={conducteur.autorisation_resp_sst}
+              date_sst={conducteur.date_autorisation_resp_sst}
+              nom_sst={conducteur.nom_resp_sst}
+              motif_sst={conducteur.motif_refus_resp_sst}
+              val_clinique={conducteur.autorisation_clinique}
+              date_clinique={conducteur.date_autorisation_clinique}
+              medecin={conducteur.medecin_clinique}
+              valideur_clinique={conducteur.valideur_clinique}
+              motif_clinique={conducteur.motif_refus_clinique}
+            />
           </div>
         )}
 
@@ -466,13 +356,12 @@ export default function OngletsConducteur({
             }
           </div>
         )}
+
         {/* --- TESTS DE CONDUITE --- */}
         {actif === 6 && (() => {
           const dernierReussi = tests.find(t => t.resultat === 'reussi')
           return (
             <div className="space-y-3">
-
-              {/* Actions */}
               <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
                 {canGererTests && <NouveauTestBtn conducteurId={conducteurId} />}
                 {dernierReussi && canGererPermis && (
@@ -488,13 +377,12 @@ export default function OngletsConducteur({
                   </a>
                 )}
               </div>
-
               {tests.length === 0
                 ? <EmptyState message="Aucun test de conduite enregistré" />
                 : tests.map(t => {
-                    const isReussi   = t.resultat === 'reussi'
-                    const isEchoue   = t.resultat === 'echoue'
-                    const isAttente  = t.resultat === 'en_attente'
+                    const isReussi  = t.resultat === 'reussi'
+                    const isEchoue  = t.resultat === 'echoue'
+                    const isAttente = t.resultat === 'en_attente'
                     return (
                       <div key={t.id} className={`p-4 rounded-lg border ${
                         isReussi  ? 'bg-green-500/5 border-green-500/20'
@@ -504,9 +392,7 @@ export default function OngletsConducteur({
                         <div className="flex items-start justify-between gap-4">
                           <div className="space-y-1.5 flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-sm font-semibold text-[#F0F6FC]">
-                                {fmt(t.date_test)}
-                              </span>
+                              <span className="text-sm font-semibold text-[#F0F6FC]">{fmt(t.date_test)}</span>
                               <span className="text-xs px-2 py-0.5 rounded bg-[#21262D] text-[#8B949E] font-medium">
                                 {t.type === 'initial' ? 'Initial' : 'Reprise'}
                               </span>
@@ -518,9 +404,7 @@ export default function OngletsConducteur({
                                 {isReussi ? '✓ Réussi' : isEchoue ? '✗ Échoué' : '⏳ En attente'}
                               </span>
                               {t.score !== null && (
-                                <span className="font-mono text-sm font-bold text-[#F0F6FC]">
-                                  {t.score}/100
-                                </span>
+                                <span className="font-mono text-sm font-bold text-[#F0F6FC]">{t.score}/100</span>
                               )}
                             </div>
                             {t.evaluateur && (
@@ -529,9 +413,7 @@ export default function OngletsConducteur({
                               </p>
                             )}
                             {t.observations && (
-                              <p className="text-xs text-[#8B949E]/70 italic">
-                                &ldquo;{t.observations}&rdquo;
-                              </p>
+                              <p className="text-xs text-[#8B949E]/70 italic">&ldquo;{t.observations}&rdquo;</p>
                             )}
                           </div>
                           {isAttente && canGererTests && (
@@ -547,6 +429,13 @@ export default function OngletsConducteur({
             </div>
           )
         })()}
+
+        {/* ── Onglet Documents ── */}
+        {actif === 7 && (
+          <div>
+            <OngletDocuments conducteurId={conducteurId} canWrite={canWrite} />
+          </div>
+        )}
 
       </div>
     </div>

@@ -3,10 +3,11 @@
  * Runner de migration 3ST HSE
  * Usage : npm run migrate
  *
- * - Lit .env.local pour les credentials Supabase
- * - Crée la table _migrations si elle n'existe pas
- * - Applique uniquement les migrations non encore exécutées
- * - Idempotent : relançable sans risque de perte de données
+ * Supporte deux modes selon NEXT_PUBLIC_SUPABASE_URL :
+ *   - Supabase Cloud  (*.supabase.co)  → Management API  api.supabase.com
+ *   - Self-hosted                       → pg_meta via Kong  {URL}/pg/query
+ *
+ * Idempotent : relançable sans risque.
  */
 
 import { readFileSync, existsSync } from 'fs'
@@ -32,45 +33,73 @@ function loadEnv() {
   return env
 }
 
-const env     = loadEnv()
-const PAT     = env.SUPABASE_ACCESS_TOKEN
-const URL_SB  = env.NEXT_PUBLIC_SUPABASE_URL
-const PROJECT = URL_SB?.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1]
+const env            = loadEnv()
+const PAT            = env.SUPABASE_ACCESS_TOKEN
+const SERVICE_KEY    = env.SUPABASE_SERVICE_ROLE_KEY
+const SUPABASE_URL   = env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, '')
 
-if (!PAT)     throw new Error('SUPABASE_ACCESS_TOKEN manquant dans .env.local')
-if (!PROJECT) throw new Error('NEXT_PUBLIC_SUPABASE_URL invalide dans .env.local')
+if (!SUPABASE_URL) throw new Error('NEXT_PUBLIC_SUPABASE_URL manquant dans .env.local')
 
-// ─── Exécuter du SQL via Management API ──────────────────────────────────────
+// ─── Détection cloud vs self-hosted ──────────────────────────────────────────
+const cloudProject = SUPABASE_URL.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1]
+const isCloud      = Boolean(cloudProject)
+
+// ─── Exécuter du SQL ──────────────────────────────────────────────────────────
 async function sql(query) {
-  const res = await fetch(
-    `https://api.supabase.com/v1/projects/${PROJECT}/database/query`,
-    {
+  let res
+
+  if (isCloud) {
+    // Supabase Cloud : Management API
+    if (!PAT) throw new Error('SUPABASE_ACCESS_TOKEN requis pour Supabase Cloud')
+    res = await fetch(
+      `https://api.supabase.com/v1/projects/${cloudProject}/database/query`,
+      {
+        method:  'POST',
+        headers: { Authorization: `Bearer ${PAT}`, 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ query }),
+      }
+    )
+  } else {
+    // Self-hosted : pg_meta via Kong
+    if (!SERVICE_KEY) throw new Error('SUPABASE_SERVICE_ROLE_KEY requis pour self-hosted')
+    res = await fetch(`${SUPABASE_URL}/pg/query`, {
       method:  'POST',
-      headers: { Authorization: `Bearer ${PAT}`, 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ query }),
-    }
-  )
-  const json = await res.json()
+      headers: {
+        Authorization:  `Bearer ${SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+        apikey:          SERVICE_KEY,
+      },
+      body: JSON.stringify({ query }),
+    })
+  }
+
+  const text = await res.text()
+  let json
+  try { json = JSON.parse(text) } catch { json = { raw: text } }
+
   if (!res.ok) {
-    const msg = json?.message ?? JSON.stringify(json)
+    const msg = json?.message ?? json?.error ?? json?.raw ?? `HTTP ${res.status}`
     throw new Error(`SQL Error (${res.status}): ${msg}`)
   }
   return json
 }
 
 // ─── Migrations ordonnées ─────────────────────────────────────────────────────
-// Ordre déterministe : ajoute ici les nouveaux fichiers à la suite
 const MIGRATIONS = [
   'migration_v2.sql',
   'migration_unicite.sql',
   'migration_v3.sql',
   'migration_v4.sql',
   'migration_v5.sql',
+  'migration_v8_ameliorations.sql',
+  'migration_v9_fixes.sql',
+  'migration_v11_workflow_v2.sql',
 ]
 
 // ─── Main ──────────────────────────────────────────────────────────────────────
 async function main() {
-  console.log(`\n🚀  Runner de migration 3ST — projet : ${PROJECT}\n`)
+  const mode = isCloud ? `Cloud (project: ${cloudProject})` : `Self-hosted (${SUPABASE_URL})`
+  console.log(`\n🚀  Runner de migration 3ST — ${mode}\n`)
 
   // Créer la table de suivi si elle n'existe pas
   await sql(`
@@ -81,9 +110,8 @@ async function main() {
     );
   `)
 
-  // Lire les migrations déjà appliquées
-  const rows   = await sql('SELECT name FROM _migrations ORDER BY id')
-  const done   = new Set((rows ?? []).map(r => r.name))
+  const rows = await sql('SELECT name FROM _migrations ORDER BY id')
+  const done = new Set((Array.isArray(rows) ? rows : (rows?.rows ?? [])).map(r => r.name))
 
   let applied = 0
 
@@ -104,11 +132,10 @@ async function main() {
 
     try {
       await sql(content)
-      await sql(`INSERT INTO _migrations (name) VALUES ('${filename.replace(/'/g, "''")}')`)
+      await sql(`INSERT INTO _migrations (name) VALUES ('${filename.replace(/'/g, "''")}') ON CONFLICT (name) DO NOTHING`)
       console.log('  ✅')
       applied++
     } catch (err) {
-      // "already exists" = migration appliquée manuellement avant le runner
       const alreadyExists = /already exists|42710|42P07|42P16/i.test(err.message)
       if (alreadyExists) {
         console.log('  ⚠  (objets déjà présents — marquée comme appliquée)')

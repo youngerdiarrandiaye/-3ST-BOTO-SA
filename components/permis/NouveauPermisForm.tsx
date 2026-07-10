@@ -2,22 +2,32 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { AlertTriangle, Ban } from 'lucide-react'
+import {
+  AlertTriangle, Ban, CheckCircle2, Circle, Shield,
+  MapPin, Calendar, LayoutGrid, User, RefreshCw, Clock,
+} from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { toastSuccess, toastError, toastInfo } from '@/lib/toast'
 import SearchableSelect from '@/components/ui/SearchableSelect'
 import type { ZoneValidite } from '@/lib/types'
 
 interface Conducteur {
-  id: string; matricule: string; nom: string; prenom: string
-  // V2
-  validation_sst: boolean; validation_clinique: boolean; zone_validite: ZoneValidite | null
+  id: string
+  matricule: string
+  nom: string
+  prenom: string
+  statut: string
+  validation_sst: boolean
+  validation_clinique: boolean
+  zone_validite: ZoneValidite | null
+  type_zone: string | null
 }
 
 interface RenewData {
   numero: string
   categories: string[]
   zone_validite: string | null
-  type_permis_site: string | null
+  type_zone: string | null
   validation_sst: boolean
   validation_clinique: boolean
 }
@@ -29,14 +39,19 @@ interface Props {
   renewData?: RenewData
 }
 
-const CATEGORIES = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
+const CATEGORIES: { code: string; desc: string }[] = [
+  { code: 'A', desc: 'Moto / 2 roues' },
+  { code: 'B', desc: 'Véhicule léger' },
+  { code: 'C', desc: 'Poids lourd' },
+  { code: 'D', desc: 'Transport pers.' },
+  { code: 'E', desc: 'Avec remorque' },
+  { code: 'F', desc: 'Engin chantier' },
+  { code: 'G', desc: 'Engin minier' },
+]
 
-const TYPES_PERMIS_SITE = [
-  'Léger (VL)',
-  'Poids lourd (PL)',
-  'Engin minier',
-  'Transport de matières dangereuses',
-  'Conduite sur piste minière',
+const TYPES_ZONE = [
+  'Zone usine', 'Zone mine', 'Zone administrative',
+  'Zone chantier', 'Zone dépôt', 'Toutes zones',
 ]
 
 const ZONES: { value: ZoneValidite; label: string }[] = [
@@ -51,29 +66,48 @@ function genNumero(matricule: string) {
   return `PI-${year}-${matricule.replace(/[^A-Z0-9]/gi, '')}-${rand}`.toUpperCase()
 }
 
-export default function NouveauPermisForm({ conducteurs, conducteurIdDefault, delivreurId, renewData }: Props) {
-  const router  = useRouter()
-  const [loading, setLoading] = useState(false)
-  const [error,   setError]   = useState('')
+function daysBetween(a: string, b: string) {
+  return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86_400_000)
+}
 
-  const today       = new Date().toISOString().slice(0, 10)
+export default function NouveauPermisForm({ conducteurs, conducteurIdDefault, delivreurId, renewData }: Props) {
+  const router = useRouter()
+  const [loading, setLoading] = useState(false)
+
+  const today        = new Date().toISOString().slice(0, 10)
   const oneYearLater = new Date(Date.now() + 365 * 86400000).toISOString().slice(0, 10)
 
   const [form, setForm] = useState({
-    conducteur_id:    conducteurIdDefault ?? '',
-    date_delivrance:  today,
-    date_expiration:  oneYearLater,
-    // V2
-    zone_validite:    (renewData?.zone_validite ?? '') as ZoneValidite | '',
-    type_permis_site: renewData?.type_permis_site ?? '',
-    validation_sst:    renewData?.validation_sst ?? false,
-    validation_clinique: renewData?.validation_clinique ?? false,
+    conducteur_id:   conducteurIdDefault ?? '',
+    date_delivrance: today,
+    date_expiration: oneYearLater,
+    zone_validite:   (renewData?.zone_validite ?? '') as ZoneValidite | '',
+    type_zone:       renewData?.type_zone ?? '',
   })
-  const [categories, setCategories] = useState<string[]>(renewData?.categories ?? [])
+  const [categories, setCategories]   = useState<string[]>(renewData?.categories ?? [])
   const [permisActif, setPermisActif] = useState<{ numero: string; statut: string } | null>(null)
+  const [autoRempli, setAutoRempli]   = useState(false)
 
+  // Auto-fill zone depuis le profil conducteur + check permis actif
   useEffect(() => {
-    if (!form.conducteur_id) { setPermisActif(null); return }
+    if (!form.conducteur_id) {
+      setPermisActif(null)
+      setAutoRempli(false)
+      return
+    }
+
+    if (!renewData) {
+      const c = conducteurs.find(x => x.id === form.conducteur_id)
+      if (c) {
+        setForm(prev => ({
+          ...prev,
+          zone_validite: (c.zone_validite ?? '') as ZoneValidite | '',
+          type_zone:     c.type_zone ?? '',
+        }))
+        setAutoRempli(true)
+      }
+    }
+
     const supabase = createClient()
     supabase
       .from('permis_internes')
@@ -83,251 +117,392 @@ export default function NouveauPermisForm({ conducteurs, conducteurIdDefault, de
       .maybeSingle()
       .then(({ data }) => {
         if (!data) { setPermisActif(null); return }
-        // Un permis valide dont la date est passée n'est pas bloquant
         if (data.statut === 'valide' && data.date_expiration && new Date(data.date_expiration) < new Date()) {
           setPermisActif(null)
         } else {
-          setPermisActif(data as any)
+          setPermisActif(data as { numero: string; statut: string })
         }
       })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.conducteur_id])
 
-  function set(k: string, v: string | boolean) { setForm(f => ({ ...f, [k]: v })) }
+  function set(k: string, v: string) {
+    setForm(f => ({ ...f, [k]: v }))
+    if (autoRempli && ['zone_validite', 'type_zone'].includes(k)) {
+      setAutoRempli(false)
+    }
+  }
 
   function toggleCat(cat: string) {
     setCategories(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat])
   }
 
-  const selectedConducteur = conducteurs.find(c => c.id === form.conducteur_id)
+  const sel                  = conducteurs.find(c => c.id === form.conducteur_id)
+  const sst_ko               = !!sel && !sel.validation_sst
+  const clinique_ko          = !!sel && !sel.validation_clinique
+  const bloque_hab           = sst_ko || clinique_ko
+  const date_livr_ko         = form.date_delivrance < today
+  const date_exp_ko          = form.date_expiration <= form.date_delivrance
+  const duree                = (form.date_delivrance && form.date_expiration && !date_exp_ko)
+    ? daysBetween(form.date_delivrance, form.date_expiration)
+    : null
 
-  const sst_manquante      = !!selectedConducteur && !selectedConducteur.validation_sst
-  const clinique_manquante = !!selectedConducteur && !selectedConducteur.validation_clinique
-  const validations_bloquantes = sst_manquante || clinique_manquante
-
-  const dateDelivrancePassee = form.date_delivrance < today
-  const dateExpirationInvalide = form.date_expiration <= form.date_delivrance
+  const checks = [
+    { id: 'cond',  label: 'Conducteur sélectionné',       ok: !!form.conducteur_id,        detail: !form.conducteur_id ? 'Rechercher par nom ou matricule' : undefined },
+    { id: 'sst',   label: 'Habilitation SST validée',      ok: !sst_ko,                     detail: sst_ko ? 'Compléter la fiche conducteur' : undefined },
+    { id: 'clin',  label: 'Visite médicale validée',        ok: !clinique_ko,                detail: clinique_ko ? 'Compléter la fiche conducteur' : undefined },
+    { id: 'perm',  label: 'Aucun permis actif existant',    ok: !permisActif,                detail: permisActif ? `Retirer le N° ${permisActif.numero}` : undefined },
+    { id: 'cats',  label: 'Catégorie(s) sélectionnée(s)',  ok: categories.length > 0,       detail: categories.length === 0 ? 'Sélectionner au moins une catégorie' : undefined },
+    { id: 'dates', label: 'Dates de validité cohérentes',  ok: !date_livr_ko && !date_exp_ko, detail: (date_livr_ko || date_exp_ko) ? 'Corriger les dates' : undefined },
+  ]
+  const allOk = checks.every(c => c.ok)
 
   async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault()
-    setError('')
-    if (!form.conducteur_id)    { setError('Sélectionnez un conducteur'); return }
-    if (categories.length === 0) { setError('Sélectionnez au moins une catégorie'); return }
-    if (dateDelivrancePassee) {
-      setError('La date de délivrance ne peut pas être antérieure à aujourd\'hui.')
-      return
-    }
-    if (dateExpirationInvalide) {
-      setError('La date d\'expiration doit être postérieure à la date de délivrance.')
-      return
-    }
-    if (validations_bloquantes) {
-      setError(`Impossible de délivrer le permis : ${[sst_manquante && 'validation SST', clinique_manquante && 'visite médicale clinique'].filter(Boolean).join(' et ')} manquante(s).`)
-      return
-    }
-    if (permisActif) { setError(`Ce conducteur a déjà un permis interne actif (N° ${permisActif.numero}).`); return }
-
+    if (!allOk) return
     setLoading(true)
     const supabase = createClient()
-    const numero   = genNumero(selectedConducteur?.matricule ?? 'XX')
+    const numero   = genNumero(sel?.matricule ?? 'XX')
 
     const { error: err } = await supabase.from('permis_internes').insert({
-      conducteur_id:   form.conducteur_id,
+      conducteur_id:    form.conducteur_id,
       numero,
       categories,
-      date_delivrance: form.date_delivrance,
-      date_expiration: form.date_expiration,
-      delivre_par:     delivreurId,
-      statut:          'valide',
-      qr_code_url:     null,
-      // V2
-      zone_validite:      form.zone_validite      || null,
-      type_permis_site:   form.type_permis_site   || null,
-      validation_sst:     form.validation_sst,
-      validation_clinique: form.validation_clinique,
+      date_delivrance:  form.date_delivrance,
+      date_expiration:  form.date_expiration,
+      delivre_par:      delivreurId,
+      statut:           'valide',
+      qr_code_url:      null,
+      zone_validite:       form.zone_validite || null,
+      type_zone:           form.type_zone    || null,
+      validation_sst:      sel?.validation_sst      ?? false,
+      validation_clinique: sel?.validation_clinique ?? false,
     })
 
     if (err) {
-      const msg = err.message
-      if (msg.includes('PERMIS_DATE_PASSE'))
-        setError('La date de délivrance ne peut pas être antérieure à aujourd\'hui.')
-      else if (msg.includes('PERMIS_DATE_INVALIDE'))
-        setError('La date d\'expiration doit être postérieure à la date de délivrance.')
-      else if (msg.includes('idx_permis_unique_actif') || msg.includes('PERMIS_ACTIF_EXISTS') || msg.includes('déjà un permis interne actif'))
-        setError('Ce conducteur a déjà un permis interne actif ou suspendu. Retirez-le avant d\'en créer un nouveau.')
-      else setError(msg)
+      toastError.erreurServeur()
       setLoading(false)
       return
     }
 
+    toastSuccess.permisDelivre(numero)
+    toastInfo.qrCodeGenere()
     router.push(conducteurIdDefault ? `/conducteurs/${form.conducteur_id}` : '/permis')
     router.refresh()
   }
 
-  const inputCls = `w-full px-4 py-2.5 bg-[#0D1117] border border-[#30363D] rounded-lg text-sm text-[#F0F6FC]
-    placeholder-[#8B949E] focus:outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/20 transition-colors`
-  const labelCls = `block text-sm font-medium text-[#8B949E] mb-1.5`
+  const inp = `w-full px-4 py-3 min-h-[44px] bg-[#0D1117] border border-[#30363D] rounded-lg text-sm text-[#F0F6FC]
+    placeholder-[#8B949E] focus:outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/20 transition-colors cursor-pointer`
+  const lbl = `block text-[10px] font-bold uppercase tracking-widest text-[#8B949E] mb-1.5`
 
   return (
-    <form onSubmit={handleSubmit} className="bg-[#161B22] border border-[#30363D] rounded-xl p-6 space-y-5">
+    <form onSubmit={handleSubmit} className="space-y-3">
 
-      {/* Conducteur */}
-      <div>
-        <label className={labelCls}>Conducteur *</label>
-        <SearchableSelect
-          value={form.conducteur_id}
-          onChange={v => set('conducteur_id', v)}
-          placeholder="Rechercher un conducteur…"
-          options={conducteurs.map(c => ({
-            value: c.id,
-            label: `${c.prenom} ${c.nom}`,
-            sublabel: c.matricule,
-          }))}
-        />
-
-        {/* Blocage habilitations — hard block */}
-        {validations_bloquantes && (
-          <div className="mt-2 px-4 py-3 bg-red-500/10 border border-red-500/30 rounded-xl space-y-1.5">
-            <div className="flex items-center gap-2">
-              <Ban size={14} className="text-red-400 flex-shrink-0" />
-              <p className="text-xs font-semibold text-red-400">Délivrance bloquée — habilitations manquantes</p>
-            </div>
-            {sst_manquante && (
-              <p className="text-xs text-[#F0F6FC]/70 ml-5">
-                ✗ Habilitation SST non validée
-              </p>
-            )}
-            {clinique_manquante && (
-              <p className="text-xs text-[#F0F6FC]/70 ml-5">
-                ✗ Visite médicale clinique non validée
-              </p>
-            )}
-            <p className="text-xs text-red-400/70 ml-5 mt-1">
-              Complétez les validations dans la fiche conducteur avant de délivrer le permis.
-            </p>
+      {/* ─────── 1. CONDUCTEUR ─────── */}
+      <div className="bg-[#161B22] border border-[#30363D] rounded-xl">
+        <div className="px-5 pt-4 pb-3 border-b border-[#21262D] flex items-center gap-2.5">
+          <div className="w-6 h-6 rounded-md bg-[#F59E0B]/10 flex items-center justify-center flex-shrink-0">
+            <User size={12} className="text-[#F59E0B]" />
           </div>
-        )}
+          <span className="text-[10px] font-black uppercase tracking-widest text-[#8B949E]">Conducteur</span>
+        </div>
 
-        {/* Blocage permis actif — hard block */}
-        {permisActif && (
-          <div className="mt-2 px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-xl space-y-1">
-            <div className="flex items-center gap-2">
-              <Ban size={14} className="text-red-400 flex-shrink-0" />
-              <p className="text-xs font-semibold text-red-400">Permis interne en cours — délivrance bloquée</p>
+        <div className="p-5 space-y-3">
+          <SearchableSelect
+            value={form.conducteur_id}
+            onChange={v => set('conducteur_id', v)}
+            placeholder="Rechercher par nom ou matricule…"
+            options={conducteurs.map(c => ({
+              value: c.id,
+              label: `${c.prenom} ${c.nom}`,
+              sublabel: c.matricule,
+            }))}
+          />
+
+          {/* Fiche conducteur OK */}
+          {sel && !bloque_hab && !permisActif && (
+            <div className="flex items-center gap-3 px-4 py-3 bg-green-500/5 border border-green-500/20 rounded-xl">
+              <div className="w-9 h-9 rounded-xl bg-[#21262D] border border-[#30363D] flex items-center justify-center flex-shrink-0">
+                <span className="text-xs font-black text-[#8B949E]">
+                  {sel.prenom[0]}{sel.nom[0]}
+                </span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-[#F0F6FC] truncate">{sel.prenom} {sel.nom}</p>
+                <p className="font-mono text-[10px] text-[#8B949E]">{sel.matricule}</p>
+              </div>
+              <div className="flex gap-1.5 flex-shrink-0">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-green-500/10 text-green-400 border border-green-500/20">SST ✓</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-green-500/10 text-green-400 border border-green-500/20">CLIN ✓</span>
+              </div>
             </div>
-            <p className="text-xs text-[#F0F6FC]/70 ml-5">
-              N° <span className="font-mono font-bold text-red-300">{permisActif.numero}</span>
-              {' '}({permisActif.statut === 'suspendu' ? 'suspendu' : 'valide'}) — retirez-le avant d&apos;en délivrer un nouveau.
-            </p>
-          </div>
-        )}
+          )}
+
+          {/* Blocage — habilitations manquantes */}
+          {bloque_hab && (
+            <div className="px-4 py-4 bg-red-950/40 border border-red-500/30 rounded-xl">
+              <div className="flex items-center gap-2 mb-2.5">
+                <Ban size={13} className="text-red-400 flex-shrink-0" />
+                <p className="text-[10px] font-black uppercase tracking-widest text-red-400">Délivrance bloquée — habilitations manquantes</p>
+              </div>
+              <div className="ml-4 space-y-1.5">
+                {sst_ko && (
+                  <div className="flex items-center gap-2">
+                    <span className="w-1 h-1 rounded-full bg-red-400 flex-shrink-0" />
+                    <p className="text-xs text-[#F0F6FC]/70">Habilitation SST non validée</p>
+                  </div>
+                )}
+                {clinique_ko && (
+                  <div className="flex items-center gap-2">
+                    <span className="w-1 h-1 rounded-full bg-red-400 flex-shrink-0" />
+                    <p className="text-xs text-[#F0F6FC]/70">Visite médicale clinique non validée</p>
+                  </div>
+                )}
+                <p className="text-[10px] text-red-400/60 mt-2">→ Compléter les validations dans la fiche conducteur avant de délivrer le permis.</p>
+              </div>
+            </div>
+          )}
+
+          {/* Blocage — permis actif */}
+          {permisActif && (
+            <div className="px-4 py-4 bg-red-950/40 border border-red-500/20 rounded-xl">
+              <div className="flex items-center gap-2 mb-1.5">
+                <Ban size={13} className="text-red-400 flex-shrink-0" />
+                <p className="text-[10px] font-black uppercase tracking-widest text-red-400">Permis actif en cours — délivrance bloquée</p>
+              </div>
+              <p className="text-xs text-[#F0F6FC]/70 ml-4">
+                N° <span className="font-mono font-bold text-red-300">{permisActif.numero}</span>
+                {' '}({permisActif.statut === 'suspendu' ? 'suspendu' : 'valide'}) — retirez-le avant d&apos;en délivrer un nouveau.
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Catégories */}
-      <div>
-        <label className={labelCls}>Catégories *</label>
-        <div className="flex flex-wrap gap-2">
-          {CATEGORIES.map(cat => (
-            <button key={cat} type="button" onClick={() => toggleCat(cat)}
-              className={`cursor-pointer w-10 h-10 rounded-lg text-sm font-bold border transition-all duration-150
-                ${categories.includes(cat)
-                  ? 'bg-[#F59E0B] text-[#0D1117] border-[#F59E0B]'
-                  : 'bg-[#0D1117] text-[#8B949E] border-[#30363D] hover:border-[#F59E0B]/40'}`}>
-              {cat}
-            </button>
+      {/* ─────── 2. CATÉGORIES ─────── */}
+      <div className="bg-[#161B22] border border-[#30363D] rounded-xl">
+        <div className="px-5 pt-4 pb-3 border-b border-[#21262D] flex items-center gap-2.5">
+          <div className="w-6 h-6 rounded-md bg-[#F59E0B]/10 flex items-center justify-center flex-shrink-0">
+            <LayoutGrid size={12} className="text-[#F59E0B]" />
+          </div>
+          <span className="text-[10px] font-black uppercase tracking-widest text-[#8B949E]">Catégories autorisées *</span>
+          {categories.length > 0 && (
+            <span className="ml-auto font-mono text-[10px] font-bold text-[#F59E0B] bg-[#F59E0B]/10 px-2 py-0.5 rounded-full">
+              {categories.sort().join(' · ')}
+            </span>
+          )}
+        </div>
+
+        <div className="p-5">
+          <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
+            {CATEGORIES.map(({ code, desc }) => {
+              const active = categories.includes(code)
+              return (
+                <button
+                  key={code}
+                  type="button"
+                  onClick={() => toggleCat(code)}
+                  className={`flex flex-col items-center justify-center gap-1 h-[68px] rounded-xl border-2 transition-all duration-150 cursor-pointer select-none
+                    ${active
+                      ? 'bg-[#F59E0B] text-[#0D1117] border-[#F59E0B] shadow-[0_0_16px_rgba(245,158,11,0.3)] scale-[1.03]'
+                      : 'bg-[#0D1117] text-[#8B949E] border-[#30363D] hover:border-[#F59E0B]/40 hover:text-[#F0F6FC]'
+                    }`}
+                >
+                  <span className="text-xl font-black leading-none">{code}</span>
+                  <span className={`text-[8px] font-semibold uppercase leading-tight text-center px-0.5 ${active ? 'text-[#0D1117]/60' : 'text-[#8B949E]/50'}`}>
+                    {desc}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* ─────── 3. ZONE ─────── */}
+      <div className="bg-[#161B22] border border-[#30363D] rounded-xl">
+        <div className="px-5 pt-4 pb-3 border-b border-[#21262D] flex items-center gap-2.5">
+          <div className="w-6 h-6 rounded-md bg-[#F59E0B]/10 flex items-center justify-center flex-shrink-0">
+            <MapPin size={12} className="text-[#F59E0B]" />
+          </div>
+          <span className="text-[10px] font-black uppercase tracking-widest text-[#8B949E]">Zone de conduite</span>
+          {autoRempli && (
+            <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
+              <RefreshCw size={9} />
+              Pré-rempli depuis le profil
+            </span>
+          )}
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className={lbl}>Zone de validité</label>
+              <select value={form.zone_validite} onChange={e => set('zone_validite', e.target.value)} className={inp}>
+                <option value="">Non définie</option>
+                {ZONES.map(z => <option key={z.value} value={z.value}>{z.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={lbl}>Type de zone</label>
+              <select value={form.type_zone} onChange={e => set('type_zone', e.target.value)} className={inp}>
+                <option value="">Non défini</option>
+                {TYPES_ZONE.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* Habilitations — lecture seule depuis la fiche conducteur */}
+          {sel && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className={`flex items-center gap-2.5 px-3.5 py-3 rounded-xl border ${
+                sel.validation_sst
+                  ? 'bg-green-500/5 border-green-500/20'
+                  : 'bg-red-950/30 border-red-500/20'
+              }`}>
+                {sel.validation_sst
+                  ? <CheckCircle2 size={13} className="text-green-400 flex-shrink-0" />
+                  : <Ban          size={13} className="text-red-400 flex-shrink-0" />
+                }
+                <div>
+                  <p className={`text-xs font-bold uppercase tracking-wide ${sel.validation_sst ? 'text-green-400' : 'text-red-400'}`}>
+                    SST {sel.validation_sst ? 'validée' : 'non validée'}
+                  </p>
+                  <p className="text-[9px] text-[#8B949E]/50 mt-0.5">Depuis la fiche conducteur</p>
+                </div>
+              </div>
+              <div className={`flex items-center gap-2.5 px-3.5 py-3 rounded-xl border ${
+                sel.validation_clinique
+                  ? 'bg-green-500/5 border-green-500/20'
+                  : 'bg-red-950/30 border-red-500/20'
+              }`}>
+                {sel.validation_clinique
+                  ? <CheckCircle2 size={13} className="text-green-400 flex-shrink-0" />
+                  : <Ban          size={13} className="text-red-400 flex-shrink-0" />
+                }
+                <div>
+                  <p className={`text-xs font-bold uppercase tracking-wide ${sel.validation_clinique ? 'text-green-400' : 'text-red-400'}`}>
+                    Visite médicale {sel.validation_clinique ? 'validée' : 'non validée'}
+                  </p>
+                  <p className="text-[9px] text-[#8B949E]/50 mt-0.5">Depuis la fiche conducteur</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ─────── 4. VALIDITÉ ─────── */}
+      <div className="bg-[#161B22] border border-[#30363D] rounded-xl">
+        <div className="px-5 pt-4 pb-3 border-b border-[#21262D] flex items-center gap-2.5">
+          <div className="w-6 h-6 rounded-md bg-[#F59E0B]/10 flex items-center justify-center flex-shrink-0">
+            <Calendar size={12} className="text-[#F59E0B]" />
+          </div>
+          <span className="text-[10px] font-black uppercase tracking-widest text-[#8B949E]">Période de validité *</span>
+          {duree && (
+            <span className="ml-auto inline-flex items-center gap-1 text-[10px] font-bold text-[#8B949E]">
+              <Clock size={10} />
+              {duree} jours
+            </span>
+          )}
+        </div>
+
+        <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className={lbl}>Date de délivrance *</label>
+            <input
+              type="date"
+              value={form.date_delivrance}
+              onChange={e => set('date_delivrance', e.target.value)}
+              required
+              min={today}
+              className={`${inp} [color-scheme:dark] ${date_livr_ko ? '!border-red-500/60 focus:!border-red-500 focus:!ring-red-500/20' : ''}`}
+            />
+            {date_livr_ko && (
+              <p className="mt-1.5 text-[11px] text-red-400 flex items-center gap-1">
+                <AlertTriangle size={11} className="flex-shrink-0" />
+                Date dans le passé
+              </p>
+            )}
+          </div>
+          <div>
+            <label className={lbl}>Date d&apos;expiration *</label>
+            <input
+              type="date"
+              value={form.date_expiration}
+              onChange={e => set('date_expiration', e.target.value)}
+              required
+              min={form.date_delivrance}
+              className={`${inp} [color-scheme:dark] ${date_exp_ko ? '!border-red-500/60 focus:!border-red-500 focus:!ring-red-500/20' : ''}`}
+            />
+            {date_exp_ko && (
+              <p className="mt-1.5 text-[11px] text-red-400 flex items-center gap-1">
+                <AlertTriangle size={11} className="flex-shrink-0" />
+                Antérieure à la délivrance
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ─────── 5. CHECKLIST PRÉ-DÉLIVRANCE ─────── */}
+      <div className={`rounded-xl border p-5 transition-all ${
+        allOk
+          ? 'bg-green-500/5 border-green-500/25'
+          : 'bg-[#161B22] border-[#30363D]'
+      }`}>
+        <div className="flex items-center gap-2.5 mb-3">
+          <Shield size={13} className={allOk ? 'text-green-400' : 'text-[#8B949E]'} />
+          <span className="text-[10px] font-black uppercase tracking-widest text-[#8B949E]">
+            Vérifications pré-délivrance
+          </span>
+          <span className={`ml-auto text-[10px] font-bold ${allOk ? 'text-green-400' : 'text-[#8B949E]'}`}>
+            {checks.filter(c => c.ok).length}/{checks.length}
+          </span>
+        </div>
+
+        <div className="space-y-2">
+          {checks.map(c => (
+            <div key={c.id} className="flex items-start gap-2.5">
+              {c.ok
+                ? <CheckCircle2 size={13} className="text-green-400 flex-shrink-0 mt-px" />
+                : <Circle      size={13} className="text-[#484F58] flex-shrink-0 mt-px" />
+              }
+              <div className="min-w-0">
+                <p className={`text-xs font-medium ${c.ok ? 'text-[#F0F6FC]' : 'text-[#8B949E]'}`}>{c.label}</p>
+                {!c.ok && c.detail && (
+                  <p className="text-[10px] text-[#484F58] mt-0.5">{c.detail}</p>
+                )}
+              </div>
+            </div>
           ))}
         </div>
-        {categories.length > 0 && (
-          <p className="text-xs text-[#8B949E] mt-2">Sélectionnées : {categories.sort().join(', ')}</p>
-        )}
       </div>
 
-      {/* Zone + Type permis site */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className={labelCls}>Zone de validité</label>
-          <select value={form.zone_validite} onChange={e => set('zone_validite', e.target.value)}
-            className={`${inputCls} cursor-pointer`}>
-            <option value="">Non définie</option>
-            {ZONES.map(z => <option key={z.value} value={z.value}>{z.label}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className={labelCls}>Type de permis site</label>
-          <select value={form.type_permis_site} onChange={e => set('type_permis_site', e.target.value)}
-            className={`${inputCls} cursor-pointer`}>
-            <option value="">Non défini</option>
-            {TYPES_PERMIS_SITE.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-        </div>
-      </div>
-
-      {/* Habilitations sur le permis */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <label className="flex items-center gap-2.5 cursor-pointer">
-          <input type="checkbox" checked={form.validation_sst}
-            onChange={e => set('validation_sst', e.target.checked)}
-            className="w-4 h-4 accent-[#F59E0B] cursor-pointer" />
-          <span className="text-sm text-[#F0F6FC]">SST validée au moment de la délivrance</span>
-        </label>
-        <label className="flex items-center gap-2.5 cursor-pointer">
-          <input type="checkbox" checked={form.validation_clinique}
-            onChange={e => set('validation_clinique', e.target.checked)}
-            className="w-4 h-4 accent-[#F59E0B] cursor-pointer" />
-          <span className="text-sm text-[#F0F6FC]">Visite médicale validée</span>
-        </label>
-      </div>
-
-      {/* Dates */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className={labelCls}>Date de délivrance *</label>
-          <input type="date" value={form.date_delivrance}
-            onChange={e => set('date_delivrance', e.target.value)} required
-            min={today}
-            className={`${inputCls} [color-scheme:dark] ${dateDelivrancePassee ? 'border-red-500/60 focus:border-red-500' : ''}`} />
-          {dateDelivrancePassee && (
-            <p className="mt-1 text-xs text-red-400 flex items-center gap-1">
-              <AlertTriangle size={11} className="flex-shrink-0" />
-              La date de délivrance ne peut pas être dans le passé.
-            </p>
-          )}
-        </div>
-        <div>
-          <label className={labelCls}>Date d&apos;expiration *</label>
-          <input type="date" value={form.date_expiration}
-            onChange={e => set('date_expiration', e.target.value)} required
-            min={form.date_delivrance}
-            className={`${inputCls} [color-scheme:dark] ${dateExpirationInvalide ? 'border-red-500/60 focus:border-red-500' : ''}`} />
-          {dateExpirationInvalide && (
-            <p className="mt-1 text-xs text-red-400 flex items-center gap-1">
-              <AlertTriangle size={11} className="flex-shrink-0" />
-              La date d&apos;expiration doit être postérieure à la date de délivrance.
-            </p>
-          )}
-        </div>
-      </div>
-
-      {error && (
-        <div className="px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">{error}</div>
-      )}
-
-      <div className="flex items-center justify-end gap-3 pt-2">
-        <button type="button" onClick={() => router.back()}
-          className="px-4 py-2.5 text-sm text-[#8B949E] border border-[#30363D] rounded-lg hover:text-[#F0F6FC] hover:border-[#F59E0B]/30 transition-colors cursor-pointer">
+      {/* ─────── ACTIONS ─────── */}
+      <div className="flex items-center justify-end gap-3 pt-1">
+        <button
+          type="button"
+          onClick={() => router.back()}
+          className="px-4 py-3 min-h-[44px] text-sm text-[#8B949E] border border-[#30363D] rounded-lg
+            hover:text-[#F0F6FC] hover:border-[#F59E0B]/30 transition-colors cursor-pointer"
+        >
           Annuler
         </button>
-        <button type="submit" disabled={loading || !!permisActif || validations_bloquantes || dateDelivrancePassee || dateExpirationInvalide}
-          className={`px-5 py-2.5 text-sm font-semibold rounded-lg transition-all duration-150 cursor-pointer disabled:opacity-50
-            ${(permisActif || validations_bloquantes || dateDelivrancePassee || dateExpirationInvalide)
-              ? 'bg-[#30363D] text-[#8B949E] cursor-not-allowed'
-              : 'bg-[#F59E0B] text-[#0D1117] hover:scale-[1.02] active:scale-[0.98]'}`}
-          style={{ transitionTimingFunction: 'cubic-bezier(0.25,0.46,0.45,0.94)' }}>
-          {loading ? 'Enregistrement…'
-            : permisActif ? 'Délivrance bloquée'
-            : validations_bloquantes ? 'Habilitations requises'
-            : dateDelivrancePassee ? 'Date de délivrance invalide'
-            : dateExpirationInvalide ? 'Dates incohérentes'
-            : 'Délivrer le permis'}
+        <button
+          type="submit"
+          disabled={loading || !allOk}
+          className={`min-h-[44px] px-6 py-3 text-sm font-bold rounded-lg transition-all duration-150
+            ${allOk && !loading
+              ? 'bg-[#F59E0B] text-[#0D1117] cursor-pointer hover:scale-[1.02] active:scale-[0.98] shadow-[0_0_20px_rgba(245,158,11,0.25)]'
+              : 'bg-[#21262D] text-[#484F58] cursor-not-allowed'
+            }`}
+        >
+          {loading
+            ? 'Délivrance en cours…'
+            : !allOk
+            ? `${checks.filter(c => c.ok).length}/${checks.length} conditions remplies`
+            : renewData ? 'Renouveler le permis' : 'Délivrer le permis interne'}
         </button>
       </div>
     </form>

@@ -16,7 +16,7 @@ export interface PermisRow {
   date_expiration: string
   categories: string[]
   zone_validite: string | null
-  type_permis_site: string | null
+  type_zone: string | null
   validation_sst: boolean
   validation_clinique: boolean
   conducteurs: {
@@ -260,8 +260,8 @@ export default function PermisTableClient({ rows, canGerer }: Props) {
                   value={selected.zone_validite ? ZONE_LABEL[selected.zone_validite] ?? selected.zone_validite : '—'}
                 />
                 <Detail
-                  label="Type permis site"
-                  value={selected.type_permis_site ?? '—'}
+                  label="Type de zone"
+                  value={selected.type_zone ?? '—'}
                 />
               </div>
 

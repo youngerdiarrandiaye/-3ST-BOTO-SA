@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { revalidatePath } from 'next/cache'
 
 export async function PATCH(
   req: NextRequest,
@@ -38,15 +39,15 @@ export async function PATCH(
 
   if (!current) return NextResponse.json({ error: 'Conducteur introuvable' }, { status: 404 })
 
-  const now = new Date().toISOString()
-  const updateData: Record<string, unknown> = { updated_at: now }
+  const today = new Date().toISOString().slice(0, 10)   // "YYYY-MM-DD" — colonne DATE
+  const updateData: Record<string, unknown> = {}
 
   if (type === 'sst') {
     updateData.validation_sst = value
-    updateData.date_validation_sst = value ? now : null
+    updateData.date_validation_sst = value ? today : null
   } else {
     updateData.validation_clinique = value
-    updateData.date_validation_clinique = value ? now : null
+    updateData.date_validation_clinique = value ? today : null
   }
 
   // Compute resulting state
@@ -67,5 +68,6 @@ export async function PATCH(
     .eq('id', id)
 
   if (error) return NextResponse.json({ error: error.message ?? 'Mise à jour impossible' }, { status: 500 })
+  revalidatePath(`/conducteurs/${id}`)
   return NextResponse.json({ success: true, statut: updateData.statut ?? current.statut })
 }
