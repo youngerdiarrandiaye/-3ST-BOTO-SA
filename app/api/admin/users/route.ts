@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getMsgUtilisateur } from '@/lib/errors/handler'
 
 export async function POST(req: NextRequest) {
   // Vérifier que le demandeur est admin
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest) {
   })
 
   if (authErr) {
-    return NextResponse.json({ error: authErr.message }, { status: 400 })
+    return NextResponse.json({ error: getMsgUtilisateur(authErr) }, { status: 400 })
   }
 
   // Upsert dans utilisateurs (au cas où le trigger n'aurait pas tout rempli)

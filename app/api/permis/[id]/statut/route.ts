@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getMsgUtilisateur } from '@/lib/errors/handler'
 
 const TRANSITIONS: Record<string, string[]> = {
   valide:   ['suspendu', 'retire', 'expire'],
@@ -86,6 +87,6 @@ export async function PATCH(
     .update(updateData)
     .eq('id', id)
 
-  if (error) return NextResponse.json({ error: error.message ?? 'Mise à jour impossible' }, { status: 500 })
+  if (error) return NextResponse.json({ error: getMsgUtilisateur(error) }, { status: 500 })
   return NextResponse.json({ success: true })
 }

@@ -25,13 +25,18 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
 
-  const { data, error } = await supabase
+  const { data: me } = await supabase.from('utilisateurs').select('role').eq('id', user.id).single()
+  if (!me || !['admin', 'hse', 'sst', 'direction'].includes(me.role))
+    return NextResponse.json({ error: 'Permission insuffisante — documents médicaux réservés HSE/SST/Direction/Admin' }, { status: 403 })
+
+  const admin = createAdminClient()
+  const { data, error } = await admin
     .from('documents_conducteur')
     .select('id, type_document, nom_fichier, taille_bytes, created_at')
     .eq('conducteur_id', id)
     .order('created_at', { ascending: false })
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return NextResponse.json({ error: 'Erreur lors de la récupération des documents' }, { status: 500 })
   return NextResponse.json(data)
 }
 

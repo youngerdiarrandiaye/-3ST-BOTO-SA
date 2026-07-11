@@ -22,14 +22,20 @@ export async function POST(
     return NextResponse.json({ error: 'Rôle insuffisant pour lever une sanction' }, { status: 403 })
   }
 
-  const body = await req.json()
-  const { conducteur_id } = body
+  const admin = createAdminClient()
 
-  if (!conducteur_id) {
-    return NextResponse.json({ error: 'conducteur_id requis' }, { status: 400 })
+  // SÉCURITÉ : lire conducteur_id depuis la sanction en base — jamais depuis le body
+  const { data: sanction, error: sanctionErr } = await admin
+    .from('sanctions')
+    .select('id, conducteur_id')
+    .eq('id', id)
+    .single()
+
+  if (sanctionErr || !sanction) {
+    return NextResponse.json({ error: 'Sanction introuvable' }, { status: 404 })
   }
 
-  const admin = createAdminClient()
+  const conducteur_id = sanction.conducteur_id
   const today = new Date().toISOString().split('T')[0]
 
   const { error } = await admin
@@ -37,7 +43,7 @@ export async function POST(
     .update({ levee_le: today, levee_par: user.id })
     .eq('id', id)
 
-  if (error) return NextResponse.json({ error: error.message ?? 'Mise à jour impossible' }, { status: 500 })
+  if (error) return NextResponse.json({ error: 'Mise à jour impossible' }, { status: 500 })
 
   // Si plus aucune sanction active → restaurer le conducteur suspendu
   const { data: restantes } = await admin

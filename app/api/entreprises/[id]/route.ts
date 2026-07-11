@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
+import { getMsgUtilisateur } from '@/lib/errors/handler'
 
 interface Ctx { params: Promise<{ id: string }> }
 
@@ -70,7 +71,7 @@ export async function PATCH(request: Request, { params }: Ctx) {
 
   const admin = createAdminClient()
   const { error } = await admin.from('entreprises').update(update).eq('id', id)
-  if (error) return NextResponse.json({ error: error.message ?? 'Mise à jour impossible' }, { status: 500 })
+  if (error) return NextResponse.json({ error: getMsgUtilisateur(error) }, { status: 500 })
 
   return NextResponse.json({ ok: true })
 }

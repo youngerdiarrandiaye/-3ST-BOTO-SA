@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
+import { getMsgUtilisateur } from '@/lib/errors/handler'
 
 type Ctx = { params: Promise<{ id: string }> }
 
@@ -59,7 +60,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   }
 
   const { error } = await admin.from('conducteurs').update(update).eq('id', id)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return NextResponse.json({ error: getMsgUtilisateur(error) }, { status: 500 })
 
   revalidatePath(`/conducteurs/${id}`)
   return NextResponse.json({ success: true })

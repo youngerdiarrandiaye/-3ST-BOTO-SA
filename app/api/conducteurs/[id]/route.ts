@@ -40,10 +40,10 @@ export async function PATCH(
 
   const admin = createAdminClient()
 
-  // Fetch current statut to decide auto-transition
+  // Fetch current statut + workflow validation fields
   const { data: current } = await admin
     .from('conducteurs')
-    .select('statut')
+    .select('statut, validation_resp_dept, autorisation_resp_sst, autorisation_clinique')
     .eq('id', id)
     .single()
 
@@ -76,9 +76,25 @@ export async function PATCH(
   }
 
   if (statut && ['admin', 'hse'].includes(me.role)) {
-    // Explicit override from admin/hse
+    // Explicit override from admin/hse — workflow complet obligatoire pour activer
     const statutsValides = ['actif', 'suspendu', 'retire', 'inactif']
-    if (statutsValides.includes(statut)) updateData.statut = statut
+    if (!statutsValides.includes(statut))
+      return NextResponse.json({ error: 'Statut invalide' }, { status: 400 })
+
+    if (statut === 'actif') {
+      if (
+        !current?.validation_resp_dept ||
+        !current?.autorisation_resp_sst ||
+        !current?.autorisation_clinique
+      ) {
+        return NextResponse.json(
+          { error: 'Workflow de validation incomplet — les 3 niveaux (Direction, SST, Médecin) sont requis avant activation' },
+          { status: 422 }
+        )
+      }
+    }
+
+    updateData.statut = statut
   } else {
     // Auto-transition based on validations (never disturb suspendu/retire)
     const cur = current?.statut
@@ -94,6 +110,6 @@ export async function PATCH(
     .update(updateData)
     .eq('id', id)
 
-  if (error) return NextResponse.json({ error: error.message ?? 'Mise à jour impossible' }, { status: 500 })
+  if (error) return NextResponse.json({ error: 'Mise à jour impossible' }, { status: 500 })
   return NextResponse.json({ success: true })
 }

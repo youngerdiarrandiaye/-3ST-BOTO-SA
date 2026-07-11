@@ -5,6 +5,7 @@ import InfractionsChart from '@/components/dashboard/InfractionsChart'
 import RecentInfractions from '@/components/dashboard/RecentInfractions'
 import AutoRefresh from '@/components/dashboard/AutoRefresh'
 import SuspensionAlerts from '@/components/dashboard/SuspensionAlerts'
+import TemporairesExpiresAlerts from '@/components/dashboard/TemporairesExpiresAlerts'
 import Link from 'next/link'
 import { AlertTriangle, CreditCard, BarChart2 } from 'lucide-react'
 import type { Infraction, RoleUtilisateur } from '@/lib/types'
@@ -31,6 +32,7 @@ async function getDashboardData() {
     { count: conducteurs_en_attente },
     { data: dernieresInfractions },
     { data: infractionsParSemaine },
+    { count: temporaires_expires },
   ] = await Promise.all([
     supabase.from('conducteurs').select('*', { count: 'exact', head: true }).eq('statut', 'actif'),
     supabase.from('infractions').select('*', { count: 'exact', head: true }).gte('date_heure', debutMois),
@@ -45,6 +47,9 @@ async function getDashboardData() {
     supabase.from('infractions')
       .select('date_heure, types_infraction(gravite)')
       .gte('date_heure', new Date(now.getTime() - 8 * 7 * 24 * 60 * 60 * 1000).toISOString()),
+    supabase.from('conducteurs').select('*', { count: 'exact', head: true })
+      .eq('est_temporaire', true)
+      .lt('date_fin_autorisation', today),
   ])
 
   const weekMap: Record<string, { total: number; critiques: number }> = {}
@@ -60,11 +65,12 @@ async function getDashboardData() {
 
   return {
     stats: {
-      conducteurs_actifs:    conducteurs_actifs    ?? 0,
-      infractions_mois:      infractions_mois      ?? 0,
-      permis_expirant_30j:   permis_expirant_30j   ?? 0,
-      conducteurs_suspendus: conducteurs_suspendus  ?? 0,
+      conducteurs_actifs:     conducteurs_actifs     ?? 0,
+      infractions_mois:       infractions_mois       ?? 0,
+      permis_expirant_30j:    permis_expirant_30j    ?? 0,
+      conducteurs_suspendus:  conducteurs_suspendus  ?? 0,
       conducteurs_en_attente: conducteurs_en_attente ?? 0,
+      temporaires_expires:    temporaires_expires    ?? 0,
     },
     dernieresInfractions: (dernieresInfractions ?? []) as unknown as Infraction[],
     chartData: Object.entries(weekMap).map(([semaine, v]) => ({ semaine, ...v })).slice(-8),
@@ -97,6 +103,7 @@ export default async function DashboardPage() {
     <div className="space-y-6 max-w-7xl mx-auto">
       <AutoRefresh />
       {['admin', 'hse', 'sst'].includes(role) && <SuspensionAlerts />}
+      {['admin', 'hse', 'sst'].includes(role) && <TemporairesExpiresAlerts />}
 
       {/* En-tête */}
       <div className="flex items-start justify-between gap-4">
@@ -129,13 +136,14 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* 5 Cartes stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+      {/* 6 Cartes stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         <StatsCard titre="Conducteurs actifs"      valeur={stats.conducteurs_actifs}       icone="Users"          couleur="green"  description="Autorisés à conduire"    delay={0}   href="/conducteurs?statut=actif" />
         <StatsCard titre="En attente validation"   valeur={stats.conducteurs_en_attente}   icone="Clock"          couleur="amber"  description="Workflow N1→N2→N3"       delay={50}  href="/conducteurs?statut=en_attente" />
         <StatsCard titre="Infractions du mois"     valeur={stats.infractions_mois}         icone="AlertTriangle"  couleur="amber"  description="Depuis le 1er du mois"   delay={100} href="/infractions?statut=declaree" />
         <StatsCard titre="Permis expirant (30j)"   valeur={stats.permis_expirant_30j}      icone="CreditCard"     couleur="red"    description="Renouvellement requis"   delay={200} href="/permis" />
         <StatsCard titre="Conducteurs suspendus"   valeur={stats.conducteurs_suspendus}    icone="ShieldX"        couleur="red"    description="Interdits de conduite"   delay={300} href="/conducteurs?statut=suspendu" />
+        <StatsCard titre="Temp. expirés"           valeur={stats.temporaires_expires}      icone="Clock"          couleur={stats.temporaires_expires > 0 ? 'red' : 'green'} description="Renouvellement requis" delay={350} href="/conducteurs?statut=inactif" />
       </div>
 
       {/* Graphique + Indicateurs */}

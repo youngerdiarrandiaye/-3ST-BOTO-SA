@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
+import { getMsgUtilisateur } from '@/lib/errors/handler'
 
 interface Ctx { params: Promise<{ id: string }> }
 
@@ -80,7 +81,7 @@ export async function PATCH(request: Request, { params }: Ctx) {
     })
     .eq('id', id)
 
-  if (updateErr) return NextResponse.json({ error: updateErr.message ?? 'Mise à jour impossible' }, { status: 500 })
+  if (updateErr) return NextResponse.json({ error: getMsgUtilisateur(updateErr) }, { status: 500 })
 
   // If the formation is already validated and points changed, adjust the driver balance
   const oldPts = prev.points_recuperes ?? 0

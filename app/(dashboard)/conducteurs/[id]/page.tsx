@@ -3,6 +3,8 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, AlertTriangle, CreditCard, GraduationCap, ShieldOff } from 'lucide-react'
 import BadgeStatut from '@/components/conducteurs/BadgeStatut'
+import BadgeTemporaire from '@/components/conducteurs/BadgeTemporaire'
+import BannerAutorisationTemporaire from '@/components/conducteurs/BannerAutorisationTemporaire'
 import JaugePoints from '@/components/conducteurs/JaugePoints'
 import OngletsConducteur from '@/components/conducteurs/OngletsConducteur'
 import EditConducteurBtn from '@/components/conducteurs/EditConducteurBtn'
@@ -99,10 +101,9 @@ export default async function FicheConducteurPage({ params }: PageProps) {
                   </span>
                 )}
                 {c.est_temporaire && (
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full
-                    bg-amber-500/10 border border-amber-500/25 text-amber-400">
-                    Temporaire
-                  </span>
+                  c.date_fin_autorisation
+                    ? <BadgeTemporaire dateFin={c.date_fin_autorisation} />
+                    : <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-400">Temporaire</span>
                 )}
                 {c.date_naissance && (
                   <span className="text-sm text-[#8B949E]">
@@ -218,6 +219,17 @@ export default async function FicheConducteurPage({ params }: PageProps) {
           </div>
         )
       })()}
+
+      {/* Banner autorisation temporaire */}
+      {c.est_temporaire && c.date_fin_autorisation && (
+        <BannerAutorisationTemporaire
+          conducteurId={c.id}
+          nom={c.nom}
+          prenom={c.prenom}
+          dateFin={c.date_fin_autorisation}
+          canRenouveler={canEdit}
+        />
+      )}
 
       {/* Onglets */}
       <OngletsConducteur

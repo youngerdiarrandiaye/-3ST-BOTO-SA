@@ -166,6 +166,11 @@ export const toastSuccess = {
     `✓ Compte de ${nom} désactivé`,
     { duration: 2000 }
   ),
+
+  renouvellementReussi: (nom: string, date: string) => toast.success(
+    `✓ Autorisation de ${nom} renouvelée jusqu'au ${date}`,
+    { duration: 5000 }
+  ),
 }
 
 // ── ERREURS ─────────────────────────────────────────────────
@@ -240,6 +245,16 @@ export const toastError = {
     `✗ Synchronisation échouée — Vérifiez la connexion`,
     { duration: 5000 }
   ),
+
+  autorisationExpiree: (nom: string) => toast.error(
+    `✗ ${nom} — Autorisation EXPIRÉE — Accès site refusé`,
+    { duration: 7000 }
+  ),
+
+  alerteExpirationMatinale: (nb: number) => toast.error(
+    `✗ ${nb} conducteur${nb > 1 ? 's' : ''} temporaire${nb > 1 ? 's' : ''} expiré${nb > 1 ? 's' : ''} cette nuit`,
+    { duration: 0 }
+  ),
 }
 
 // ── AVERTISSEMENTS ───────────────────────────────────────────
@@ -283,6 +298,16 @@ export const toastWarn = {
   validationRefusee: (etape: string) => toast.warning(
     `⚠ Refus enregistré — ${etape}`,
     { duration: 4000 }
+  ),
+
+  expireAujourdhui: (nom: string) => toast.warning(
+    `⚠ ${nom} — Autorisation expire AUJOURD'HUI`,
+    { duration: 0 }
+  ),
+
+  expireBientot: (nom: string, jours: number) => toast.warning(
+    `⚠ ${nom} — Autorisation expire dans ${jours} jour${jours > 1 ? 's' : ''}`,
+    { duration: 6000 }
   ),
 }
 

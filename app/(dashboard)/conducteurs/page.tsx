@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { Plus, Search, Users, Clock, ShieldAlert, CheckCircle2, UserX, ChevronRight } from 'lucide-react'
 import BadgeStatut from '@/components/conducteurs/BadgeStatut'
+import BadgeTemporaire from '@/components/conducteurs/BadgeTemporaire'
 import JaugePoints from '@/components/conducteurs/JaugePoints'
 import Pagination from '@/components/ui/Pagination'
 import type { Conducteur, RoleUtilisateur } from '@/lib/types'
@@ -43,9 +44,10 @@ export default async function ConducteursPage({ searchParams }: PageProps) {
   // Stats globales (sur TOUS les conducteurs, sans filtre)
   const { data: allRaw } = await supabase
     .from('conducteurs')
-    .select('statut, niveau_validation_courant')
+    .select('statut, niveau_validation_courant, est_temporaire, date_fin_autorisation')
     .limit(2000)
 
+  const now = new Date()
   const all = allRaw ?? []
   const total      = all.length
   const nbActif    = all.filter(c => c.statut === 'actif').length
@@ -56,6 +58,11 @@ export default async function ConducteursPage({ searchParams }: PageProps) {
   const nbSuspendu = all.filter(c => c.statut === 'suspendu').length
   const nbRefuse   = all.filter(c => c.statut === 'refuse').length
   const nbRetire   = all.filter(c => c.statut === 'retire').length
+  const nbTemporairesExpires = all.filter(c =>
+    c.est_temporaire &&
+    c.date_fin_autorisation &&
+    new Date(c.date_fin_autorisation) < now
+  ).length
 
   // Pipeline validation — combien en attente à chaque niveau (en_attente seulement, workflow actif)
   const pipelineN1 = all.filter(c => c.statut === 'en_attente' && c.niveau_validation_courant === 1).length
@@ -105,7 +112,7 @@ export default async function ConducteursPage({ searchParams }: PageProps) {
       </div>
 
       {/* ── KPI cards ─────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <StatCard
           icon={<CheckCircle2 size={18} />}
           label="Actifs"
@@ -137,6 +144,14 @@ export default async function ConducteursPage({ searchParams }: PageProps) {
           sub="Dossier rejeté"
           color="red"
           href="/conducteurs?statut=refuse"
+        />
+        <StatCard
+          icon={<Clock size={18} />}
+          label="Temp. expirés"
+          value={nbTemporairesExpires}
+          sub="Renouvellement requis"
+          color={nbTemporairesExpires > 0 ? 'red' : 'gray'}
+          href="/conducteurs?statut=inactif"
         />
       </div>
 
@@ -275,21 +290,10 @@ export default async function ConducteursPage({ searchParams }: PageProps) {
                             </p>
                             <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                               {c.est_temporaire && (
-                                <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded
-                                  bg-[#F59E0B]/15 border border-[#F59E0B]/30 text-[#F59E0B]">
-                                  Temporaire
-                                </span>
+                                c.date_fin_autorisation
+                                  ? <BadgeTemporaire dateFin={c.date_fin_autorisation} compact />
+                                  : <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-[#F59E0B]/15 border border-[#F59E0B]/30 text-[#F59E0B]">Temp.</span>
                               )}
-                              {c.est_temporaire && c.date_fin_autorisation && (() => {
-                                const jours = Math.ceil((new Date(c.date_fin_autorisation!).getTime() - Date.now()) / 86400000)
-                                if (jours < 0) return (
-                                  <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-red-500/15 border border-red-500/30 text-red-400">Expiré</span>
-                                )
-                                if (jours <= 7) return (
-                                  <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-red-500/15 border border-red-500/30 text-red-400">Exp. {jours}j</span>
-                                )
-                                return null
-                              })()}
                             </div>
                           </div>
                         </div>

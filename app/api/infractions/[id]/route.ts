@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getMsgUtilisateur } from '@/lib/errors/handler'
 
 const CHAMPS_MODIFIABLES = ['description', 'localisation', 'date_heure', 'zone_constatee'] as const
 
@@ -43,6 +44,6 @@ export async function PATCH(
   const { error } = await admin
     .from('infractions').update(update).eq('id', id)
 
-  if (error) return NextResponse.json({ error: error.message ?? 'Mise à jour impossible' }, { status: 500 })
+  if (error) return NextResponse.json({ error: getMsgUtilisateur(error) }, { status: 500 })
   return NextResponse.json({ success: true })
 }

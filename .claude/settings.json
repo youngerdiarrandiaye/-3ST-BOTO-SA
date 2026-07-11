@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm audit *)",
+      "Bash(Test-Path \"c:\\\\Users\\\\YOUSSOU DIARA\\\\Desktop\\\\3st-web\\\\package-lock.json\")",
+      "Bash(Test-Path \"c:\\\\Users\\\\YOUSSOU DIARA\\\\Desktop\\\\3st-web\\\\yarn.lock\")",
+      "Bash(Test-Path \"c:\\\\Users\\\\YOUSSOU DIARA\\\\Desktop\\\\3st-web\\\\pnpm-lock.yaml\")"
+    ]
+  }
+}

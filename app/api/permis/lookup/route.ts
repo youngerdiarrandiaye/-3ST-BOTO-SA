@@ -19,6 +19,7 @@ export async function GET(request: Request) {
       id, numero, statut, date_expiration, categories,
       conducteurs (
         id, nom, prenom, matricule, statut, points_actuels,
+        est_temporaire, date_fin_autorisation,
         entreprises ( nom )
       )
     `)

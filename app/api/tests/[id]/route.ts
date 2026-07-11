@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getMsgUtilisateur } from '@/lib/errors/handler'
 
 export async function PATCH(
   req: NextRequest,
@@ -30,6 +31,6 @@ export async function PATCH(
     observations: observations?.trim() || null,
   }).eq('id', id)
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return NextResponse.json({ error: getMsgUtilisateur(error) }, { status: 500 })
   return NextResponse.json({ success: true })
 }

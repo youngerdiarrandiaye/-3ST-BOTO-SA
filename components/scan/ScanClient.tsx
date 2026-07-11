@@ -126,23 +126,40 @@ function FoundResult({ permis: p, onReset }: { permis: any; onReset: () => void 
   const isPermisKO = p.statut !== 'valide'
   const pts = c?.points_actuels ?? 0
 
+  // Client-side double-check: match SQL CURRENT_DATE logic (dateFin < today = strict past)
+  const todayStr = new Date().toISOString().split('T')[0]
+  const isTemporaireExpire =
+    c?.est_temporaire &&
+    c?.date_fin_autorisation &&
+    c.date_fin_autorisation.split('T')[0] < todayStr
+
+  const isBlocked = isSuspended || isPermisKO || isTemporaireExpire
+
   return (
     <div className="space-y-4">
       {/* Carte conducteur */}
       <div className="bg-[#161B22] border border-[#30363D] rounded-xl overflow-hidden">
 
         {/* Bandeau statut */}
-        {(isSuspended || isPermisKO) ? (
-          <div className={`px-5 py-3 flex items-center gap-2 border-b border-[#30363D] ${isSuspended ? 'bg-red-500/10' : 'bg-orange-500/10'}`}>
-            <ShieldX size={14} className={isSuspended ? 'text-red-400' : 'text-orange-400'} />
-            <span className={`text-xs font-bold uppercase tracking-wide ${isSuspended ? 'text-red-400' : 'text-orange-400'}`}>
-              {isSuspended ? 'Conducteur suspendu' : `Permis ${STATUT_PERMIS_LABEL[p.statut] ?? p.statut}`}
+        {isBlocked ? (
+          <div className={`px-5 py-3 flex items-center gap-2 border-b border-[#30363D] ${
+            isSuspended || isTemporaireExpire ? 'bg-red-500/10' : 'bg-orange-500/10'
+          }`}>
+            <ShieldX size={14} className={isSuspended || isTemporaireExpire ? 'text-red-400' : 'text-orange-400'} />
+            <span className={`text-xs font-bold uppercase tracking-wide ${isSuspended || isTemporaireExpire ? 'text-red-400' : 'text-orange-400'}`}>
+              {isTemporaireExpire
+                ? 'Autorisation temporaire EXPIRÉE — Accès refusé'
+                : isSuspended
+                  ? 'Conducteur suspendu'
+                  : `Permis ${STATUT_PERMIS_LABEL[p.statut] ?? p.statut}`}
             </span>
           </div>
         ) : (
           <div className="px-5 py-3 flex items-center gap-2 bg-green-500/5 border-b border-[#30363D]">
             <CheckCircle2 size={14} className="text-green-400" />
-            <span className="text-xs font-bold uppercase tracking-wide text-green-400">Permis valide</span>
+            <span className="text-xs font-bold uppercase tracking-wide text-green-400">
+              {c?.est_temporaire ? 'Permis valide — Conducteur temporaire' : 'Permis valide'}
+            </span>
           </div>
         )}
 

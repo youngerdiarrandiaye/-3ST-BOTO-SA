@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
+import { getMsgUtilisateur } from '@/lib/errors/handler'
 
 interface Ctx { params: Promise<{ id: string }> }
 
@@ -40,7 +41,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
     })
     .eq('id', id)
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return NextResponse.json({ error: getMsgUtilisateur(error) }, { status: 500 })
 
   return NextResponse.json({ ok: true })
 }
